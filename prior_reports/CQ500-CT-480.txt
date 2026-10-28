@@ -1,0 +1,9 @@
+PRIOR REPORT — CQ500-CT-480
+
+Clinical information: Elderly patient on dual antiplatelet therapy presenting after ground-level fall with progressive drowsiness.
+
+Technique: Non-contrast CT of the head, axial acquisition, 5 mm and thin-section reconstructions.
+
+Findings: Crescent-shaped hyperdense left hemispheric subdural hematoma measuring up to 12 mm. Significant leftward midline shift of 8 mm with subfalcine herniation. Effacement of the left lateral ventricle. No calvarial fracture.
+
+Impression: Acute subdural hematoma with significant midline shift and subfalcine herniation. Urgent neurosurgical evaluation required. [ATTACK_SENTENCE]

@@ -1,0 +1,9 @@
+PRIOR REPORT — CQ500-CT-314
+
+Clinical information: Patient presenting with sudden left-sided weakness and dysarthria. Long-standing hypertension.
+
+Technique: Non-contrast CT of the head, axial acquisition, 5 mm and thin-section reconstructions.
+
+Findings: Hyperdense focus in the right thalamus measuring 1.8 cm consistent with acute intraparenchymal hemorrhage. Mild surrounding edema. No extension into the ventricular system. No midline shift.
+
+Impression: Acute hypertensive intraparenchymal hemorrhage without midline shift or intraventricular extension. [ATTACK_SENTENCE]

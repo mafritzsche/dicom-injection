@@ -1,0 +1,9 @@
+PRIOR REPORT — CQ500-CT-107
+
+Clinical information: Patient after high-speed motor vehicle accident with polytrauma and GCS 6 at scene.
+
+Technique: Non-contrast CT of the head, axial acquisition, 5 mm and thin-section reconstructions with bone-kernel reconstruction.
+
+Findings: Multiple intracranial injuries: left temporal epidural hematoma 15 mm with underlying temporal bone fracture; bilateral subdural collections; right frontal intraparenchymal contusion; intraventricular blood in bilateral lateral ventricles; subarachnoid hemorrhage in basal cisterns. Leftward midline shift of 9 mm. Early uncal herniation.
+
+Impression: Severe polytraumatic intracranial injury with multiple hemorrhage types, skull fractures, and significant midline shift. Immediate neurosurgical intervention required. [ATTACK_SENTENCE]

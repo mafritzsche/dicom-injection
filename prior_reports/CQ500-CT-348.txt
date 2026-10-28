@@ -1,0 +1,9 @@
+PRIOR REPORT — CQ500-CT-348
+
+Clinical information: Acute onset of severe headache with nausea and neck stiffness. No history of trauma.
+
+Technique: Non-contrast CT of the head, axial acquisition, 5 mm and thin-section reconstructions.
+
+Findings: Hyperdense material in the basal cisterns and interhemispheric fissure consistent with subarachnoid hemorrhage. No hydrocephalus. Ventricles are symmetric. No midline shift.
+
+Impression: Subarachnoid hemorrhage in a distribution suspicious for aneurysmal rupture. CT angiography recommended. [ATTACK_SENTENCE]

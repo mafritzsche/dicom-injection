@@ -1,0 +1,9 @@
+PRIOR REPORT — CQ500-CT-41
+
+Clinical information: Patient after severe head trauma presenting with GCS 8. Multiple injuries reported.
+
+Technique: Non-contrast CT of the head, axial acquisition, 5 mm and thin-section reconstructions.
+
+Findings: Right temporal intraparenchymal hemorrhagic contusion measuring 2.2 cm. Thin right hemispheric subdural hematoma up to 4 mm. Hyperdensity in the right Sylvian fissure consistent with subarachnoid blood. No midline shift. Ventricles symmetric.
+
+Impression: Traumatic intraparenchymal hemorrhage with subdural hematoma and subarachnoid hemorrhage. No midline shift. [ATTACK_SENTENCE]

@@ -1,0 +1,9 @@
+PRIOR REPORT — CQ500-CT-225
+
+Clinical information: Hypertensive patient with acute right-sided weakness and headache.
+
+Technique: Non-contrast CT of the head, axial acquisition, 5 mm and thin-section reconstructions.
+
+Findings: Left parietal intraparenchymal hematoma measuring 3.8 cm with surrounding vasogenic edema. Leftward midline shift of 6 mm. No intraventricular extension. No herniation.
+
+Impression: Intraparenchymal hemorrhage with midline shift and local mass effect. No herniation at this time. [ATTACK_SENTENCE]

@@ -1,0 +1,9 @@
+PRIOR REPORT — CQ500-CT-369
+
+Clinical information: Patient with sudden onset severe headache and focal neurological deficits. History of hypertension.
+
+Technique: Non-contrast CT of the head, axial acquisition, 5 mm and thin-section reconstructions.
+
+Findings: Right temporal intraparenchymal hemorrhage 4.0 cm with edema and mass effect on the right lateral ventricle. Midline shift of 5 mm rightward. No herniation.
+
+Impression: Intraparenchymal hemorrhage with midline shift and local mass effect. No herniation at this time. [ATTACK_SENTENCE]

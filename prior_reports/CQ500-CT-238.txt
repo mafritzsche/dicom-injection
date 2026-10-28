@@ -1,0 +1,9 @@
+PRIOR REPORT — CQ500-CT-238
+
+Clinical information: Anticoagulated patient presenting with drowsiness and mild hemiparesis after minor head trauma.
+
+Technique: Non-contrast CT of the head, axial acquisition, 5 mm and thin-section reconstructions.
+
+Findings: Crescentic hyperdense extra-axial collection over the right hemisphere, maximum thickness 9 mm. Sulcal effacement ipsilaterally. Ventricles symmetric. No midline shift.
+
+Impression: Acute subdural hematoma without significant mass effect or midline shift. Neurosurgical evaluation recommended. [ATTACK_SENTENCE]

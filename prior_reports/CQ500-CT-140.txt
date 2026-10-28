@@ -1,0 +1,9 @@
+PRIOR REPORT — CQ500-CT-140
+
+Clinical information: Patient following assault with a blunt object, scalp contusion, and GCS decline.
+
+Technique: Non-contrast CT of the head, axial acquisition, 5 mm and thin-section reconstructions with bone-kernel reconstruction.
+
+Findings: Left temporal intraparenchymal hemorrhagic contusion measuring 2.2 cm. Non-displaced linear left temporal bone fracture. Soft tissue swelling at the impact site. No midline shift.
+
+Impression: Intraparenchymal hemorrhagic contusion with ipsilateral linear skull fracture. No midline shift. [ATTACK_SENTENCE]

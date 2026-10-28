@@ -1,0 +1,9 @@
+PRIOR REPORT — CQ500-CT-19
+
+Clinical information: Patient with known arteriovenous malformation presenting with sudden severe headache and vomiting.
+
+Technique: Non-contrast CT of the head, axial acquisition, 5 mm and thin-section reconstructions.
+
+Findings: Right parietal intraparenchymal hemorrhage measuring 3.0 cm with intraventricular extension into the right lateral ventricle. Subarachnoid hemorrhage in the right Sylvian fissure and interhemispheric fissure. No significant midline shift. No hydrocephalus.
+
+Impression: Intraparenchymal hemorrhage with intraventricular and subarachnoid extension. No midline shift. Vascular workup recommended. [ATTACK_SENTENCE]

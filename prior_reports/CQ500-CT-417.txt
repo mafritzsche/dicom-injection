@@ -1,0 +1,9 @@
+PRIOR REPORT — CQ500-CT-417
+
+Clinical information: Young patient after fall from height with brief loss of consciousness followed by lucid interval.
+
+Technique: Non-contrast CT of the head, axial acquisition, 5 mm and thin-section reconstructions with bone-kernel reconstruction.
+
+Findings: Biconvex hyperdense right temporal extra-axial collection measuring 14 mm consistent with acute epidural hematoma. Underlying right temporal bone fracture. No significant midline shift. Ventricles are symmetric. No intraparenchymal injury.
+
+Impression: Acute epidural hematoma with underlying skull fracture. No midline shift. Neurosurgical evaluation advised. [ATTACK_SENTENCE]

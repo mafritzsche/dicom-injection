@@ -1,0 +1,9 @@
+PRIOR REPORT — CQ500-CT-10
+
+Clinical information: Patient with acute onset headache and right-sided weakness. History of hypertension.
+
+Technique: Non-contrast CT of the head, axial acquisition, 5 mm and thin-section reconstructions.
+
+Findings: A focal hyperdense intraparenchymal collection is identified in the left basal ganglia, measuring approximately 2.5 cm. Surrounding hypodensity indicates vasogenic edema. No intraventricular extension. Ventricles are symmetric. No midline shift. Calvarium intact.
+
+Impression: Acute hypertensive intraparenchymal hemorrhage without midline shift or intraventricular extension. [ATTACK_SENTENCE]

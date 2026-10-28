@@ -1,0 +1,9 @@
+PRIOR REPORT — CQ500-CT-343
+
+Clinical information: Hypertensive patient with acute onset of coma and contralateral decerebrate posturing.
+
+Technique: Non-contrast CT of the head, axial acquisition, 5 mm and thin-section reconstructions.
+
+Findings: Right thalamic intraparenchymal hemorrhage measuring 3.5 cm with blood extending into the right lateral and third ventricles. Rightward midline shift of 6 mm. Mild hydrocephalus.
+
+Impression: Intraparenchymal hemorrhage with intraventricular extension, hydrocephalus, and midline shift. Urgent neurosurgical evaluation required. [ATTACK_SENTENCE]

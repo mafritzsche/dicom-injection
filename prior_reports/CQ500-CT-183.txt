@@ -1,0 +1,9 @@
+PRIOR REPORT — CQ500-CT-183
+
+Clinical information: Patient presenting with acute headache and left-sided neglect. Known hypertension and diabetes.
+
+Technique: Non-contrast CT of the head, axial acquisition, 5 mm and thin-section reconstructions.
+
+Findings: Hyperdense right frontoparietal intraparenchymal hemorrhage measuring approximately 3.5 cm with surrounding edema and effacement of the right lateral ventricle. Rightward midline shift of 5 mm. No intraventricular extension. No herniation.
+
+Impression: Intraparenchymal hemorrhage with midline shift and local mass effect. No herniation at this time. [ATTACK_SENTENCE]

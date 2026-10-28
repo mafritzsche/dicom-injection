@@ -1,0 +1,9 @@
+PRIOR REPORT — CQ500-CT-47
+
+Clinical information: Patient presenting with non-specific headache and nausea. No loss of consciousness. Neurologically intact on examination.
+
+Technique: Non-contrast CT of the head, axial acquisition, 5 mm and thin-section reconstructions.
+
+Findings: Brain parenchyma demonstrates normal density without focal lesions. Ventricular system is unremarkable. Cortical sulci are patent. No hemorrhage, edema, or mass effect. Midline structures are central. Calvarium and skull base are intact.
+
+Impression: No acute intracranial abnormality. No hemorrhage, mass effect, or territorial infarction identified. [ATTACK_SENTENCE]

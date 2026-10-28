@@ -1,0 +1,9 @@
+PRIOR REPORT — CQ500-CT-397
+
+Clinical information: Patient after fall with direct head impact, scalp wound, and brief loss of consciousness.
+
+Technique: Non-contrast CT of the head, axial acquisition, 5 mm and thin-section reconstructions with bone-kernel reconstruction.
+
+Findings: Right parietal intraparenchymal contusion 3.0 cm with overlying non-displaced calvarial fracture. Scalp hematoma. No surrounding edema. Ventricles symmetric. No midline shift.
+
+Impression: Intraparenchymal hemorrhagic contusion with ipsilateral linear skull fracture. No midline shift. [ATTACK_SENTENCE]

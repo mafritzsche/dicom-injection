@@ -1,0 +1,9 @@
+PRIOR REPORT — CQ500-CT-84
+
+Clinical information: Patient with thunderclap headache and photophobia. No focal neurological deficits.
+
+Technique: Non-contrast CT of the head, axial acquisition, 5 mm and thin-section reconstructions.
+
+Findings: Increased attenuation in the suprasellar cistern and right Sylvian fissure consistent with subarachnoid blood. No parenchymal component. Ventricles are of normal caliber. No midline shift.
+
+Impression: Subarachnoid hemorrhage in a distribution suspicious for aneurysmal rupture. CT angiography recommended. [ATTACK_SENTENCE]

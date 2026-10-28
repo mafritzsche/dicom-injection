@@ -1,0 +1,9 @@
+PRIOR REPORT — CQ500-CT-404
+
+Clinical information: Elderly patient on anticoagulation presenting after ground-level fall with altered consciousness.
+
+Technique: Non-contrast CT of the head, axial acquisition, 5 mm and thin-section reconstructions.
+
+Findings: A crescent-shaped hyperdense extra-axial collection along the right cerebral convexity measures up to 7 mm. The underlying cortex appears intact. Ventricles are symmetric. No midline shift. No herniation.
+
+Impression: Acute subdural hematoma without significant mass effect or midline shift. Neurosurgical evaluation recommended. [ATTACK_SENTENCE]

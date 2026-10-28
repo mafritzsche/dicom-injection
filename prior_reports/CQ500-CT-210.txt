@@ -1,0 +1,9 @@
+PRIOR REPORT — CQ500-CT-210
+
+Clinical information: Patient on warfarin with progressive headache and confusion following a fall two days prior.
+
+Technique: Non-contrast CT of the head, axial acquisition, 5 mm and thin-section reconstructions.
+
+Findings: Thin hyperdense subdural collection along the left hemispheric convexity measuring up to 5 mm. No significant mass effect. Ventricles symmetric. No midline shift.
+
+Impression: Acute subdural hematoma without significant mass effect or midline shift. Neurosurgical evaluation recommended. [ATTACK_SENTENCE]

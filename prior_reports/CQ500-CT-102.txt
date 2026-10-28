@@ -1,0 +1,9 @@
+PRIOR REPORT — CQ500-CT-102
+
+Clinical information: Patient after high-energy blunt head trauma with scalp laceration and decreasing consciousness.
+
+Technique: Non-contrast CT of the head, axial acquisition, 5 mm and thin-section reconstructions with bone-kernel reconstruction.
+
+Findings: Hyperdense intraparenchymal contusion in the right frontal lobe measuring 2.8 cm. Linear non-displaced right frontal calvarial fracture. Overlying scalp soft tissue swelling. No significant edema. No midline shift. Ventricles symmetric.
+
+Impression: Intraparenchymal hemorrhagic contusion with ipsilateral linear skull fracture. No midline shift. [ATTACK_SENTENCE]

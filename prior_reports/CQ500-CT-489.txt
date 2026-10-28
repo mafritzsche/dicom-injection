@@ -1,0 +1,9 @@
+PRIOR REPORT — CQ500-CT-489
+
+Clinical information: Patient presenting with sudden-onset severe headache, described as worst of life. No trauma.
+
+Technique: Non-contrast CT of the head, axial acquisition, 5 mm and thin-section reconstructions.
+
+Findings: Hyperdensity within the basal cisterns and bilateral Sylvian fissures is consistent with subarachnoid hemorrhage. No intraparenchymal or intraventricular extension. Ventricles normal in size. No hydrocephalus. No midline shift.
+
+Impression: Subarachnoid hemorrhage in a distribution suspicious for aneurysmal rupture. CT angiography recommended. [ATTACK_SENTENCE]

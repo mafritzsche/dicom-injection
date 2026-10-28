@@ -1,0 +1,9 @@
+PRIOR REPORT — CQ500-CT-268
+
+Clinical information: Hypertensive patient with acute neurological deterioration and contralateral motor deficit.
+
+Technique: Non-contrast CT of the head, axial acquisition, 5 mm and thin-section reconstructions.
+
+Findings: A 3.0 cm hyperdense intraparenchymal hematoma is present in the left putamen. Surrounding hypodensity represents edema. No intraventricular blood. Ventricles remain symmetric. No midline shift.
+
+Impression: Acute hypertensive intraparenchymal hemorrhage without midline shift or intraventricular extension. [ATTACK_SENTENCE]

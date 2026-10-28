@@ -1,0 +1,9 @@
+PRIOR REPORT — CQ500-CT-227
+
+Clinical information: Patient with uncontrolled hypertension presenting with severe headache and rapid neurological deterioration.
+
+Technique: Non-contrast CT of the head, axial acquisition, 5 mm and thin-section reconstructions.
+
+Findings: Hypertensive hemorrhage in the left putamen measuring 4.2 cm with intraventricular rupture into bilateral lateral ventricles. Leftward midline shift of 8 mm. Obstructive hydrocephalus.
+
+Impression: Intraparenchymal hemorrhage with intraventricular extension, hydrocephalus, and midline shift. Urgent neurosurgical evaluation required. [ATTACK_SENTENCE]

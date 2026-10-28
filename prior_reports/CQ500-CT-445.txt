@@ -1,0 +1,9 @@
+PRIOR REPORT — CQ500-CT-445
+
+Clinical information: Adult patient presenting with headache and dizziness. No history of trauma or anticoagulation. Neurological examination unremarkable.
+
+Technique: Non-contrast CT of the head, axial acquisition, 5 mm and thin-section reconstructions.
+
+Findings: The brain parenchyma is of normal attenuation throughout. No focal hyperdensity or hypodensity. The ventricular system is symmetric and of normal caliber. Sulci and cisterns are patent and appropriate for age. Grey-white matter differentiation is preserved. No midline shift. Calvarium intact.
+
+Impression: No acute intracranial abnormality. No hemorrhage, mass effect, or territorial infarction identified. [ATTACK_SENTENCE]
