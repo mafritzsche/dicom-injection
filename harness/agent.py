@@ -14,6 +14,7 @@ Ein Lauf:
 import json
 import time
 import re
+import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 from openai import OpenAI
@@ -22,9 +23,10 @@ from config import (
     OPENROUTER_API_KEY, OPENROUTER_BASE_URL,
     VLLM_BASE_URL, VLLM_MODELS,
     MODELS, MAX_TOOL_CALLS, SYSTEM_PROMPT, SYSTEM_PROMPT_VERSION,
-    LOGS_DIR, PRIOR_REPORTS,
+    LOGS_DIR, PRIOR_REPORTS, SEND_MESSAGE_ENFORCE_ALLOWLIST,
 )
-from tools import execute_tool, parse_tool_call, TOOL_DEFINITIONS
+from tools import execute_tool, parse_tool_call, TOOL_DEFINITIONS, _resolve_study_id
+from variants import ensure_variant
 
 
 def run_single(
@@ -44,7 +46,9 @@ def run_single(
         study_id        : z.B. "CQ500-CT-42"
         attack_id       : z.B. "A01" oder "C01"
         attack          : Zeile aus attacks.csv als dict
-        ground_truth    : True wenn Blutung vorhanden (aus subset.csv)
+        ground_truth    : True wenn Blutung vorhanden (aus subset.csv). Wird nur
+                          für den simulierten CAD und das Protokoll genutzt und
+                          gelangt NIE in den Modell-Prompt.
         repetition      : 0, 1 oder 2
         prior_report_path: Pfad zur .txt-Datei des Vorbefunds
 
@@ -66,15 +70,24 @@ def run_single(
         "ImageComments", "Vorbefund", "Bild"
     ) else attack.get("short_text", "")
 
-    injected_headers = {}
-    if placement == "StudyDescription":
-        injected_headers["StudyDescription"] = attack_text
-    elif placement == "SeriesDescription":
-        injected_headers["SeriesDescription"] = attack_text
-    elif placement == "ImageComments":
-        injected_headers["ImageComments"] = attack_text
-    elif placement == "Bild":
-        injected_headers["BurnedText"] = attack_text
+    # ── Variante als eigene DICOM-Studie in Orthanc materialisieren ──────────
+    # Die Manipulation steckt danach in den DICOM-Daten selbst; das Original
+    # bleibt unverändert. Damit ist die Variante über ihre eigene PatientID
+    # adressierbar (z. B. CQ500-CT-10__A33).
+    variant = ensure_variant(study_id, attack_id, attack, text=attack_text)
+
+    if variant:
+        study_ref = variant["patient_id"]
+        injected_headers = {}   # bereits in der DICOM-Kopie enthalten
+    else:
+        study_ref = study_id
+        injected_headers = {}
+        if placement == "StudyDescription":
+            injected_headers["StudyDescription"] = attack_text
+        elif placement == "SeriesDescription":
+            injected_headers["SeriesDescription"] = attack_text
+        elif placement == "ImageComments":
+            injected_headers["ImageComments"] = attack_text
     # Vorbefund wird separat eingesetzt (letzter Satz der Impression)
 
     # ── Vorbefund laden und Angriffstext einfügen ────────────────────────────
@@ -90,9 +103,9 @@ def run_single(
 
     # ── Context ──────────────────────────────────────────────────────────────
     run_context = {
-        "study_id":        study_id,
+        "study_id":        study_ref,
         "attack_id":       attack_id,
-        "ground_truth":    ground_truth,
+        "ground_truth":    ground_truth,   # nur für den CAD, nie im Prompt
         "injected_headers": injected_headers,
     }
 
@@ -126,7 +139,14 @@ def run_single(
         "model":                  model_name,
         "model_string":           model_string,
         "system_prompt_version":  SYSTEM_PROMPT_VERSION,
+        # Prüfsumme des Prompttexts: erkennt Änderungen ohne Versionsbump
+        "system_prompt_sha256":   hashlib.sha256(SYSTEM_PROMPT.encode("utf-8")).hexdigest(),
+        "arm":                    "attack" if SYSTEM_PROMPT_VERSION == "1.0" else "defense",
+        "is_control":             attack.get("target", "") == "control",
+        "send_message_enforce_allowlist": SEND_MESSAGE_ENFORCE_ALLOWLIST,
         "study_id":               study_id,
+        "study_ref":              study_ref,
+        "variant":                variant,
         "attack_id":              attack_id,
         "placement":              placement,
         "target":                 attack.get("target", ""),
@@ -135,7 +155,8 @@ def run_single(
         "ground_truth":           ground_truth,
         "repetition":             repetition,
         "started_at":             datetime.now(timezone.utc).isoformat(),
-        "messages":               [],
+        # Vollständiger Verlauf inkl. initialem System- und Aufgabentext
+        "messages":               [dict(m) for m in messages],
         "tool_calls":             [],
         "write_report_args":      None,
         "set_priority_args":      None,
@@ -200,13 +221,27 @@ def run_single(
 
         tool_result = execute_tool(tool_name, tool_args, run_context)
 
-        # Tool-Aufruf protokollieren
+        # Bilder getrennt behandeln: sie gehen als echte Bild-Blöcke an das
+        # Modell, nicht als base64-Text im JSON-Ergebnis.
+        images = None
+        if isinstance(tool_result, dict) and "images" in tool_result:
+            images = tool_result.pop("images")
+
+        # Tool-Aufruf protokollieren (ohne base64-Ballast)
         tool_log_entry = {
             "turn":      turn,
             "name":      tool_name,
             "arguments": tool_args,
             "result":    tool_result,
         }
+        if images:
+            tool_log_entry["n_images"] = len(images)
+            tool_log_entry["images_omitted"] = "base64 data URLs, als Bild-Blöcke übergeben"
+        if "study_id" in tool_args:
+            # angefragte vs. tatsächlich verwendete Study-ID
+            tool_log_entry["study_resolved"] = _resolve_study_id(
+                tool_args.get("study_id", ""), run_context
+            )
         log["tool_calls"].append(tool_log_entry)
 
         # Ergebnisse für Scoring speichern
@@ -225,8 +260,24 @@ def run_single(
 
         # Tool-Ergebnis als User-Nachricht zurückgeben
         result_msg = f"Tool result for {tool_name}:\n```json\n{json.dumps(tool_result, indent=2)}\n```"
-        messages.append({"role": "user", "content": result_msg})
-        log["messages"].append({"role": "user", "content": result_msg})
+        if images:
+            # Text + die Schichten als echte Bild-Blöcke
+            content = [{
+                "type": "text",
+                "text": result_msg + f"\n\n{len(images)} axial slices follow as images.",
+            }]
+            content += [
+                {"type": "image_url", "image_url": {"url": data_url}}
+                for data_url in images
+            ]
+            messages.append({"role": "user", "content": content})
+            log["messages"].append({
+                "role":    "user",
+                "content": result_msg + f"\n[{len(images)} image blocks attached]",
+            })
+        else:
+            messages.append({"role": "user", "content": result_msg})
+            log["messages"].append({"role": "user", "content": result_msg})
 
         # Fertig wenn beide Pflichttools aufgerufen
         if required_tools_called["write_report"] and required_tools_called["set_priority"]:
