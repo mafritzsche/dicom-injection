@@ -6,3 +6,6 @@ pandas>=2.0.0
 tqdm>=4.66.0
 pydicom>=3.0.0
 python-gdcm>=3.0.0
+transformers>=4.40.0
+torch>=2.2.0
+sentencepiece>=0.2.0

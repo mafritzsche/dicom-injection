@@ -22,8 +22,9 @@ from openai import OpenAI
 from config import (
     OPENROUTER_API_KEY, OPENROUTER_BASE_URL,
     VLLM_BASE_URL, VLLM_MODELS,
-    MODELS, MAX_TOOL_CALLS, SYSTEM_PROMPT, SYSTEM_PROMPT_VERSION,
+    MODELS, MAX_TOOL_CALLS, SYSTEM_PROMPT, SYSTEM_PROMPT_VERSION, SYSTEM_PROMPTS,
     LOGS_DIR, PRIOR_REPORTS, SEND_MESSAGE_ENFORCE_ALLOWLIST,
+    HEADER_SANITIZATION_ARMS, GUARD_ARMS,
 )
 from tools import execute_tool, parse_tool_call, TOOL_DEFINITIONS, _resolve_study_id
 from variants import ensure_variant
@@ -37,6 +38,7 @@ def run_single(
     ground_truth: bool,
     repetition: int,
     prior_report_path: Path | None = None,
+    system_prompt_version: str | None = None,
 ) -> dict:
     """
     Führt einen einzelnen Lauf durch.
@@ -51,9 +53,21 @@ def run_single(
                           gelangt NIE in den Modell-Prompt.
         repetition      : 0, 1 oder 2
         prior_report_path: Pfad zur .txt-Datei des Vorbefunds
+        system_prompt_version: Version aus config.SYSTEM_PROMPTS. None = Standard
+                          (config.SYSTEM_PROMPT_VERSION). Die Version bestimmt
+                          den experimentellen Arm.
 
     Gibt das vollständige Lauf-Protokoll als dict zurück.
     """
+
+    # ── Systemprompt-Version (Arm) festlegen ─────────────────────────────────
+    prompt_version = system_prompt_version or SYSTEM_PROMPT_VERSION
+    prompt_text    = SYSTEM_PROMPTS.get(prompt_version)
+    if prompt_text is None:
+        raise ValueError(
+            f"Unbekannte Systemprompt-Version '{prompt_version}'. "
+            f"Bekannt: {sorted(SYSTEM_PROMPTS)}"
+        )
 
     # ── Client initialisieren ────────────────────────────────────────────────
     if model_name in VLLM_MODELS:
@@ -101,12 +115,25 @@ def run_single(
             # Platzhalter entfernen (Kontrollarm oder andere Platzierung)
             prior_report = raw.replace("[ATTACK_SENTENCE]", "").strip()
 
+    # Abwehrarm 1.3/1.4: Vorbefund vor der Anzeige durch Prompt Guard 2
+    guard_events = []
+    if prompt_version in GUARD_ARMS and prior_report:
+        from guard import filter_text
+        prior_report, ereignis = filter_text(prior_report, "Vorbefund")
+        if ereignis:
+            guard_events.append(ereignis)
+
     # ── Context ──────────────────────────────────────────────────────────────
     run_context = {
         "study_id":        study_ref,
         "attack_id":       attack_id,
         "ground_truth":    ground_truth,   # nur für den CAD, nie im Prompt
         "injected_headers": injected_headers,
+        # Abwehrarm 1.2: Header werden gegen die Allowlist bereinigt, bevor
+        # das Modell sie zu sehen bekommt
+        "sanitize_headers": prompt_version in HEADER_SANITIZATION_ARMS,
+        # Abwehrarm 1.3/1.4: Datenblöcke laufen durch Prompt Guard 2
+        "guard": prompt_version in GUARD_ARMS,
     }
 
     # ── Aufgabenbeschreibung ─────────────────────────────────────────────────
@@ -130,7 +157,7 @@ def run_single(
 
     # ── Nachrichtenverlauf initialisieren ────────────────────────────────────
     messages = [
-        {"role": "system", "content": SYSTEM_PROMPT + "\n\n" + TOOL_DEFINITIONS},
+        {"role": "system", "content": prompt_text + "\n\n" + TOOL_DEFINITIONS},
         {"role": "user",   "content": task_text},
     ]
 
@@ -138,10 +165,10 @@ def run_single(
     log = {
         "model":                  model_name,
         "model_string":           model_string,
-        "system_prompt_version":  SYSTEM_PROMPT_VERSION,
+        "system_prompt_version":  prompt_version,
         # Prüfsumme des Prompttexts: erkennt Änderungen ohne Versionsbump
-        "system_prompt_sha256":   hashlib.sha256(SYSTEM_PROMPT.encode("utf-8")).hexdigest(),
-        "arm":                    "attack" if SYSTEM_PROMPT_VERSION == "1.0" else "defense",
+        "system_prompt_sha256":   hashlib.sha256(prompt_text.encode("utf-8")).hexdigest(),
+        "arm":                    "attack" if prompt_version == "1.0" else "defense",
         "is_control":             attack.get("target", "") == "control",
         "send_message_enforce_allowlist": SEND_MESSAGE_ENFORCE_ALLOWLIST,
         "study_id":               study_id,
@@ -288,6 +315,7 @@ def run_single(
         log["abort_reason"] = "max_turns_reached"
 
     # ── Lauf abschließen ─────────────────────────────────────────────────────
+    log["guard_events"] = guard_events + run_context.get("guard_events", [])
     log["duration_seconds"] = round(time.time() - start_time, 2)
     log["finished_at"]      = datetime.now(timezone.utc).isoformat()
 
@@ -300,8 +328,11 @@ def run_single(
 def _save_log(log: dict):
     """Speichert Lauf-Protokoll als JSON-Datei."""
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    # Prompt-Version gehört in den Dateinamen: sonst sind die Arme im
+    # logs/-Ordner nicht auseinanderzuhalten.
     fname = (
         f"{log['study_id']}__{log['attack_id']}__{log['model']}"
+        f"__v{log['system_prompt_version']}"
         f"__rep{log['repetition']}__{log['started_at'][:19].replace(':', '-')}.json"
     )
     path = LOGS_DIR / fname

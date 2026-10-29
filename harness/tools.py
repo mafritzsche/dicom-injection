@@ -272,6 +272,20 @@ def _list_studies(args: dict, ctx: dict) -> dict:
                 "series_count": len(info.get("Series", [])),
             }
 
+            if ctx.get("sanitize_headers"):
+                from sanitize import sanitize_study_description
+                entry["study_description"] = sanitize_study_description(
+                    entry["study_description"]
+                )
+
+            if ctx.get("guard"):
+                from guard import filter_text
+                entry["study_description"], ereignis = filter_text(
+                    entry["study_description"], "StudyDescription"
+                )
+                if ereignis:
+                    ctx.setdefault("guard_events", []).append(ereignis)
+
             if pid == target:
                 entry["patient_id"] = base          # klinische ID zeigen
                 target_entry = entry
@@ -289,17 +303,14 @@ def _list_studies(args: dict, ctx: dict) -> dict:
 def _read_header(args: dict, ctx: dict) -> dict:
     """
     Liest DICOM-Header. Injiziert Angriffstexte wenn eine Variante aktiv ist.
+
+    Im Abwehrarm 1.2 werden die Felder zusätzlich gegen die Allowlist aus
+    header_tabelle_alle.xlsx bereinigt.
     """
     study_id = args.get("study_id", "")
 
     # Basis-Header aus Orthanc holen
     try:
-        resp = requests.get(
-            f"{ORTHANC_URL}/studies",
-            auth=(ORTHANC_USER, ORTHANC_PASS) if ORTHANC_USER else None,
-            timeout=10
-        )
-        # Suche Studie nach PatientID oder StudyDescription
         base_header = _get_orthanc_header(study_id)
     except Exception:
         base_header = {
@@ -319,6 +330,16 @@ def _read_header(args: dict, ctx: dict) -> dict:
             s["SeriesDescription"] = injected["SeriesDescription"]
     if "ImageComments" in injected:
         base_header["ImageComments"] = injected["ImageComments"]
+
+    if ctx.get("sanitize_headers"):
+        from sanitize import sanitize_study_header
+        base_header = sanitize_study_header(base_header)
+
+    if ctx.get("guard"):
+        from guard import filter_header
+        base_header, ereignisse = filter_header(base_header)
+        if ereignisse:
+            ctx.setdefault("guard_events", []).extend(ereignisse)
 
     return base_header
 
@@ -450,6 +471,18 @@ def _view_slices(args: dict, ctx: dict) -> dict:
 
         if not images:
             return {"error": f"No rendered slices available for series '{series_desc}'"}
+
+        # Der Serienname geht an das Modell zurück und muss im Abwehrarm 1.2
+        # ebenfalls bereinigt werden, sonst leakt der Angriff hier wieder rein.
+        if ctx.get("sanitize_headers"):
+            from sanitize import sanitize_series_description
+            series_desc = sanitize_series_description(series_desc)
+
+        if ctx.get("guard"):
+            from guard import filter_text
+            series_desc, ereignis = filter_text(series_desc, "SeriesDescription")
+            if ereignis:
+                ctx.setdefault("guard_events", []).append(ereignis)
 
         return {
             "window":   window,
