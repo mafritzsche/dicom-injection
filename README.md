@@ -97,11 +97,14 @@ Läufe werden nur ausgeführt, wenn die Zielausrichtung der Attacke zur Studie
 passt (`applies_to`): `downgrade` und `priority_down` nur auf positiven,
 `priority_up` nur auf negativen Fällen.
 
-**Wichtig:** `1.2` (Header-Bereinigung), `1.3` (Guard-Modell) und `1.4`
-(Kombination) existieren derzeit nur als Prompttext — die Mechanismen sind nicht
-implementiert. Der Runner bricht für diese Arme ab. Mit
-`--allow-prompt-only-arms` lassen sie sich erzwingen; die Läufe werden dann in
-`results.csv` mit `prompt_only_arm=true` markiert.
+Alle Abwehrarme sind implementiert: `1.2` bereinigt die Header (`sanitize.py`),
+`1.3` filtert Datenblöcke mit Prompt Guard 2 (`guard.py`), `1.4` kombiniert beides
+mit dem Systemprompt aus `1.1`. Welche Arme als umgesetzt gelten, steht in
+`ARM_IMPLEMENTED` (`config.py`). Für einen Arm, der dort auf `False` steht, bricht
+der Runner ab; mit `--allow-prompt-only-arms` lässt er sich als reine
+Prompt-Variante erzwingen und wird in `results.csv` mit `prompt_only_arm=true`
+markiert. Für die Guard-Arme prüft der Runner vor dem Start, ob das Modell lädt
+(siehe 1.3).
 
 Ergebnisse: `logs/results.csv` (ein Datensatz pro Lauf) und
 `logs/summary.json` (Erfolgsraten je Arm/Modell/Attacke). Bereits protokollierte
