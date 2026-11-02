@@ -88,6 +88,14 @@ def existing_runs() -> dict:
             d.get("study_id"), d.get("attack_id"), d.get("model"),
             d.get("system_prompt_version"), d.get("repetition"),
         )
+
+        # Infrastruktur-Abbrüche (z. B. Sleep, Netzwerk) gelten NICHT als
+        # erledigt - sonst würde Resume den Lauf überspringen und ein
+        # Timeout-Ergebnis als Datenpunkt stehen bleiben.
+        abbruch = str(d.get("abort_reason") or "")
+        if abbruch.startswith("API error"):
+            continue
+
         done[key] = {
             "arm":            d.get("arm"),
             "prompt_version": d.get("system_prompt_version"),

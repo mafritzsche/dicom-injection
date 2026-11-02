@@ -33,12 +33,14 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 # ── Modelle ───────────────────────────────────────────────────────────────────
-# Versionsstrings beim Studienstart einfrieren und nicht mehr ändern.
+# Protokoll: je Anbieter das aktuellste multimodale Frontier-Modell,
+# Batch-Endpunkt verfügbar. Versionsstrings beim Studienstart einfrieren
+# und nicht mehr ändern. Stand: 2026-10-30
 # Format: { run_name: openrouter_model_string }
 MODELS = {
-    "anthropic":  "anthropic/claude-opus-4-5",
-    "openai":     "openai/gpt-4o",
-    "google":     "google/gemini-2.5-pro",
+    "anthropic":  "anthropic/claude-opus-5.5",    # 2026-09-22, text+image+file
+    "openai":     "openai/gpt-6.1-terra-pro",     # 2026-10-26, file+image+text
+    "google":     "google/gemini-4-argon",        # 2026-10-13, file+image+text
     # Open-weight über internen vLLM-Server
     "qwen":       "qwen/qwen-vl-max",       # Platzhalter — beim Start anpassen
     "llama":      "meta-llama/llama-4-maverick",  # Platzhalter
