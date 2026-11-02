@@ -84,7 +84,9 @@ HEADER_SANITIZATION_ARMS = {"1.2", "1.4"}
 # Vorgeschalteter Klassifikator: Datenblöcke werden vor der Anzeige geprüft und
 # bei Einstufung als MALICIOUS durch einen Marker ersetzt. Header-Felder werden
 # als Ganzes geprüft, der Vorbefund satzweise.
-GUARD_MODEL_ID    = "meta-llama/Llama-Prompt-Guard-2-86M"
+# Lokale Kopie von meta-llama/Llama-Prompt-Guard-2-86M (kein Netz, kein Token
+# zur Laufzeit nötig). Download: download-model.sh, siehe README.
+GUARD_MODEL_ID    = "/data/fritzsche/guard-model/Llama-Prompt-Guard-2-86M"
 GUARD_THRESHOLD   = 0.5
 GUARD_ARMS        = {"1.3", "1.4"}
 # Einzige Quelle für den Marker - die Systemprompts 1.3/1.4 binden ihn ein

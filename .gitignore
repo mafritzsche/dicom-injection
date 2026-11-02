@@ -223,3 +223,6 @@ __marimo__/
 .DS_Store
 .env
 .env
+
+# Lokale Notizen mit HF-Token
+download-guard-model.txt

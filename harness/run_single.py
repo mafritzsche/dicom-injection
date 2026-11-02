@@ -55,7 +55,7 @@ def preflight(arm: str):
         sys.exit(
             f"Prompt Guard 2 ist für Arm {arm} nötig, "
             f"konnte aber nicht geladen werden:\n{e}\n\n"
-            f"HF_TOKEN in die .env eintragen (Lizenz auf der Modellseite akzeptieren)."
+            f"Liegt das Modell unter GUARD_MODEL_ID in config.py? Siehe README."
         )
 
 

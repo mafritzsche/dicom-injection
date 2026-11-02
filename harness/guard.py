@@ -19,8 +19,8 @@ dann ungültig - die Aufrufer dürfen GuardError nicht abfangen und weiterlaufen
 
 Voraussetzungen:
   - transformers, torch, sentencepiece im venv
-  - HF-Token mit akzeptierter Llama-4-Lizenz, als HF_TOKEN in der Umgebung
-    (das Modell meta-llama/Llama-Prompt-Guard-2-86M ist gated)
+  - lokale Kopie des Modells unter GUARD_MODEL_ID (config.py). Das Original
+    meta-llama/Llama-Prompt-Guard-2-86M ist gated (Llama-4-Lizenz).
 
 Das Modell hat 512 Token Kontext; längere Texte werden abschnittsweise geprüft.
 """
@@ -67,8 +67,8 @@ def _load():
         _tokenizer = _model = None
         raise GuardError(
             f"Prompt Guard 2 konnte nicht geladen werden: {e}\n"
-            f"Das Modell ist gated - HF_TOKEN mit akzeptierter Llama-4-Lizenz "
-            f"in die .env eintragen (HF_TOKEN=hf_...)."
+            f"Liegt das Modell unter GUARD_MODEL_ID ({GUARD_MODEL_ID})? "
+            f"Sonst mit download-model.sh herunterladen (siehe README)."
         ) from e
 
     _model.eval()

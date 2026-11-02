@@ -45,8 +45,15 @@ wird vor der Anzeige klassifiziert und bei `MALICIOUS` durch
 `[content removed by safety filter]` ersetzt. Treffer stehen als `guard_events`
 im Lauf-Protokoll.
 
-Voraussetzung: Das Modell ist gated. Lizenz auf der Hugging-Face-Seite akzeptieren
-und `HF_TOKEN` in die `.env` eintragen. Selbsttest:
+Voraussetzung: Das Modell liegt lokal unter `GUARD_MODEL_ID` (`config.py`,
+derzeit `/data/fritzsche/guard-model/Llama-Prompt-Guard-2-86M`). Das Original ist
+gated: Lizenz auf der Hugging-Face-Seite akzeptieren, dann einmalig laden mit
+
+```sh
+bash /data/fritzsche/download-model.sh meta-llama/Llama-Prompt-Guard-2-86M /data/fritzsche/guard-model "$HF_TOKEN"
+```
+
+Zur Laufzeit braucht der Guard weder Netz noch Token. Selbsttest:
 
 ```sh
 python guard.py        # zeigt Schwelle und Klassifikation von Beispieltexten

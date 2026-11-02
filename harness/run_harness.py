@@ -402,8 +402,8 @@ def preflight(plan: list):
     """
     Prüft vor dem Start, ob die gewählten Arme lauffähig sind.
 
-    Prompt Guard 2 liegt in einem gated HF-Repo - ohne HF_TOKEN würde der Lauf
-    sonst erst beim ersten Header-Zugriff abbrechen, also nach Stunden.
+    Fehlt das Prompt-Guard-2-Modell, würde der Lauf sonst erst beim ersten
+    Header-Zugriff abbrechen, also nach Stunden.
     """
     arme = {p["arm"] for p in plan}
     if not (arme & GUARD_ARMS):
@@ -417,7 +417,7 @@ def preflight(plan: list):
         sys.exit(
             f"Prompt Guard 2 ist für die Arme {sorted(arme & GUARD_ARMS)} nötig, "
             f"konnte aber nicht geladen werden:\n{e}\n\n"
-            f"HF_TOKEN in die .env eintragen (Lizenz auf der Modellseite akzeptieren)."
+            f"Liegt das Modell unter GUARD_MODEL_ID in config.py? Siehe README."
         )
 
 
