@@ -28,6 +28,7 @@ from config import (
     CAD_SENSITIVITY, CAD_SPECIFICITY, CAD_SEED_OFFSET,
     VARIANT_SEPARATOR,
 )
+from guard import GuardError
 
 # ── Tool-Definitionen (für den Kontext des Modells) ───────────────────────────
 
@@ -139,6 +140,10 @@ def execute_tool(name: str, arguments: dict, context: dict) -> dict:
 
     try:
         return tools[name](args, context)
+    except GuardError:
+        # Guard-Ausfall macht den Lauf ungültig - nicht als Tool-Fehler an das
+        # Modell zurückgeben, sondern bis in die Agentenschleife durchreichen
+        raise
     except Exception as e:
         return {"error": str(e)}
 
@@ -278,13 +283,14 @@ def _list_studies(args: dict, ctx: dict) -> dict:
                     entry["study_description"]
                 )
 
+            # Auch fremde Studien werden gefiltert; ihre Ereignisse tragen
+            # is_current_study = False
             if ctx.get("guard"):
                 from guard import filter_text
-                entry["study_description"], ereignis = filter_text(
-                    entry["study_description"], "StudyDescription"
+                entry["study_description"] = filter_text(
+                    entry["study_description"], ctx, "list_studies",
+                    "StudyDescription", pid,
                 )
-                if ereignis:
-                    ctx.setdefault("guard_events", []).append(ereignis)
 
             if pid == target:
                 entry["patient_id"] = base          # klinische ID zeigen
@@ -296,6 +302,8 @@ def _list_studies(args: dict, ctx: dict) -> dict:
 
         studies = ([target_entry] if target_entry else []) + others[:19]
         return {"studies": studies}
+    except GuardError:
+        raise
     except Exception as e:
         return {"error": f"Orthanc not reachable: {e}"}
 
@@ -337,9 +345,7 @@ def _read_header(args: dict, ctx: dict) -> dict:
 
     if ctx.get("guard"):
         from guard import filter_header
-        base_header, ereignisse = filter_header(base_header)
-        if ereignisse:
-            ctx.setdefault("guard_events", []).extend(ereignisse)
+        base_header = filter_header(base_header, ctx, "read_header", study_id)
 
     return base_header
 
@@ -480,9 +486,9 @@ def _view_slices(args: dict, ctx: dict) -> dict:
 
         if ctx.get("guard"):
             from guard import filter_text
-            series_desc, ereignis = filter_text(series_desc, "SeriesDescription")
-            if ereignis:
-                ctx.setdefault("guard_events", []).append(ereignis)
+            series_desc = filter_text(
+                series_desc, ctx, "view_slices", "SeriesDescription", study_id
+            )
 
         return {
             "window":   window,
@@ -493,6 +499,8 @@ def _view_slices(args: dict, ctx: dict) -> dict:
             "images":   images,  # Data-URLs -> werden als Bild-Blöcke übergeben
         }
 
+    except GuardError:
+        raise
     except Exception as e:
         return {"error": str(e)}
 

@@ -95,6 +95,9 @@ def existing_runs() -> dict:
         abbruch = str(d.get("abort_reason") or "")
         if abbruch.startswith("API error"):
             continue
+        # Ungültige Läufe (Guard-Ausfall) ebenfalls wiederholen
+        if d.get("invalid"):
+            continue
 
         done[key] = {
             "arm":            d.get("arm"),
