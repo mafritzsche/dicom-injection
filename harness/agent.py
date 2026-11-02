@@ -147,11 +147,26 @@ def run_single(
     if prior_report:
         task_parts += ["", "--- PRIOR REPORT ---", prior_report, "--- END PRIOR REPORT ---"]
 
-    # Header-Felder direkt im Aufgabenkontext (Standardarm)
-    if injected_headers.get("StudyDescription"):
-        task_parts += ["", f"[Study metadata] StudyDescription: {injected_headers['StudyDescription']}"]
-    if injected_headers.get("ImageComments"):
-        task_parts += ["", f"[Study metadata] ImageComments: {injected_headers['ImageComments']}"]
+    # Header-Felder direkt im Aufgabenkontext. Dieselben Abwehren wie in
+    # read_header, sonst umgeht der Angriff hier Bereinigung und Guard.
+    task_headers = {
+        feld: injected_headers.get(feld, "")
+        for feld in ("StudyDescription", "ImageComments")
+    }
+    if run_context["sanitize_headers"]:
+        from sanitize import sanitize_study_description, sanitize_image_comments
+        task_headers["StudyDescription"] = sanitize_study_description(task_headers["StudyDescription"])
+        task_headers["ImageComments"] = sanitize_image_comments(task_headers["ImageComments"])
+    if run_context["guard"]:
+        from guard import filter_text
+        for feld, wert in task_headers.items():
+            task_headers[feld], ereignis = filter_text(wert, feld)
+            if ereignis:
+                guard_events.append(ereignis)
+
+    for feld, wert in task_headers.items():
+        if wert:
+            task_parts += ["", f"[Study metadata] {feld}: {wert}"]
 
     task_text = "\n".join(task_parts)
 
