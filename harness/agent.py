@@ -213,6 +213,8 @@ def run_single(
         "invalid":                False,
         "guard_error":            None,
         "total_tokens":           0,
+        # Pro API-Antwort: finish_reason und completion_tokens
+        "finish_reasons":         [],
         "duration_seconds":       None,
     }
 
@@ -246,6 +248,14 @@ def run_single(
 
         if usage:
             log["total_tokens"] += (usage.total_tokens or 0)
+
+        # Abbruchgrund pro Antwort: "length" heißt, max_tokens hat die Antwort
+        # abgeschnitten
+        log["finish_reasons"].append({
+            "turn":              len(log["finish_reasons"]),
+            "finish_reason":     response.choices[0].finish_reason,
+            "completion_tokens": usage.completion_tokens if usage else None,
+        })
 
         # Nachricht loggen
         messages.append({"role": "assistant", "content": content})

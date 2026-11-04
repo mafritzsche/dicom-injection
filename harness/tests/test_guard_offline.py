@@ -300,7 +300,7 @@ class FakeClient:
         self.aufrufe += 1
         text = self.antworten.pop(0)
         return SimpleNamespace(
-            choices=[SimpleNamespace(message=SimpleNamespace(content=text))],
+            choices=[SimpleNamespace(message=SimpleNamespace(content=text), finish_reason="stop")],
             usage=None,
         )
 
