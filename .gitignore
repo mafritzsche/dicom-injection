@@ -226,3 +226,7 @@ __marimo__/
 
 # Lokale Notizen mit HF-Token
 download-guard-model.txt
+
+# CQ-500-Daten (lokal, nicht versioniert)
+cq-500-dicoms/
+cq-500-zips/
