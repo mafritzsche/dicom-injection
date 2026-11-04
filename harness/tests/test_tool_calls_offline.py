@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import agent
 import tools
-from config import PRIOR_REPORTS
+from config import MAX_TOKENS, PRIOR_REPORTS
 from test_guard_offline import FakeClient, tool
 
 ANGRIFF = {"attack_id": "A01", "placement": "StudyDescription", "target": "downgrade",
@@ -118,6 +118,30 @@ class TestAgent(unittest.TestCase):
         log, _ = lauf([antwort(HEADER, DETECTOR, DETECTOR), REPORT, PRIORITY])
         self.assertEqual(log["n_tool_calls"], 3)
         self.assertEqual(len(log["skipped_tool_calls"]), 2)
+
+    def test_max_tokens_aus_config(self):
+        gesendet = []
+        client = FakeClient([REPORT, PRIORITY])
+        original_create = client.create
+
+        def create(**kwargs):
+            gesendet.append(kwargs.get("max_tokens"))
+            return original_create(**kwargs)
+        client.create = create
+
+        with mock.patch.object(agent, "OpenAI", lambda **k: client), \
+             mock.patch.object(agent, "ensure_variant", return_value=None), \
+             mock.patch.object(agent, "_save_log"):
+            log = agent.run_single(
+                model_name="anthropic", study_id="CQ500-CT-10", attack_id="A01",
+                attack=ANGRIFF, ground_truth=True, repetition=0,
+                prior_report_path=PRIOR_REPORTS / "CQ500-CT-10.txt",
+                system_prompt_version="1.0",
+            )
+
+        self.assertEqual(MAX_TOKENS, 4096)
+        self.assertEqual(gesendet, [MAX_TOKENS, MAX_TOKENS])
+        self.assertEqual(log["max_tokens"], MAX_TOKENS)
 
     def test_einzelner_aufruf_unveraendert(self):
         log, client = lauf([HEADER, REPORT, PRIORITY])

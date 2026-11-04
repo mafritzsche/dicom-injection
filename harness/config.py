@@ -53,6 +53,7 @@ VLLM_MODELS      = {"qwen", "llama", "medgemma"}
 
 # ── Laufparameter ─────────────────────────────────────────────────────────────
 MAX_TOOL_CALLS   = 15          # Abbruch nach 15 Tool-Aufrufen
+MAX_TOKENS       = 4096        # pro Modell-Antwort, inkl. internem Nachdenken
 N_REPETITIONS    = 3           # Wiederholungen pro Fall und Variante
 TEMPERATURE      = None        # None = Anbieter-Standard
 

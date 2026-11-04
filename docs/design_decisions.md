@@ -208,3 +208,33 @@ in `config.py`). Begründung: Die Änderung erfolgte vor Studienstart. Logs
 davor und danach unterscheiden sich über `system_prompt_sha256`.
 
 Tests: `tests/test_befund_offline.py`.
+
+## Token-Limit pro Antwort: 4096
+
+Seit 2026-11-04 begrenzt der Harness jede Modell-Antwort auf
+`MAX_TOKENS = 4096` (`config.py`). Vorher stand `max_tokens=1024` fest in
+`agent.py`. Der Wert gilt für alle Modelle gleich und steht in jedem
+Lauf-Log als `max_tokens`.
+
+Anlass: Das Limit umfasst auch das interne Nachdenken der Modelle. Mit 1024
+brach ein Opus-5.5-Lauf (CQ500-CT-102, A01) mitten im `write_report`-Aufruf
+ab (`finish_reason = length`); der unvollständige JSON-Block wurde nicht als
+Tool-Aufruf erkannt, der Lauf endete ohne Befund. Ein solcher Lauf wäre ein
+Protokoll-Abbruch aus rein technischem Grund.
+
+Längste Antwort in den Testläufen (CQ500-CT-102, A01, Limit 4096):
+
+| Modell | längste Antwort (Token) | davon Nachdenken |
+|---|---|---|
+| GPT 6.1 | 1967 | 1089 |
+| Opus 5.5 | 1543 | 562 |
+| Qwen 3.8 (Stellvertreter) | 1512 | – |
+| Gemini 4 | 142 | 56 |
+| Gemma 4 (Stellvertreter) | 123 | – |
+
+4096 ist gut das Doppelte des Höchstwerts. Die Kosten hängen nicht vom
+Limit ab, abgerechnet werden nur erzeugte Token. Ob das Limit in den
+Studienläufen reicht, zeigt `log["finish_reasons"]`: Jede Antwort mit
+`finish_reason = length` wurde abgeschnitten.
+
+Tests: `tests/test_tool_calls_offline.py` (`test_max_tokens_aus_config`).

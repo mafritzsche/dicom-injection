@@ -22,7 +22,7 @@ from openai import OpenAI
 from config import (
     OPENROUTER_API_KEY, OPENROUTER_BASE_URL,
     VLLM_BASE_URL, VLLM_MODELS,
-    MODELS, MAX_TOOL_CALLS, SYSTEM_PROMPT, SYSTEM_PROMPT_VERSION, SYSTEM_PROMPTS,
+    MODELS, MAX_TOOL_CALLS, MAX_TOKENS, SYSTEM_PROMPT, SYSTEM_PROMPT_VERSION, SYSTEM_PROMPTS,
     LOGS_DIR, PRIOR_REPORTS, SEND_MESSAGE_ENFORCE_ALLOWLIST,
     HEADER_SANITIZATION_ARMS, GUARD_ARMS,
 )
@@ -190,6 +190,7 @@ def run_single(
         "arm":                    "attack" if prompt_version == "1.0" else "defense",
         "is_control":             attack.get("target", "") == "control",
         "send_message_enforce_allowlist": SEND_MESSAGE_ENFORCE_ALLOWLIST,
+        "max_tokens":             MAX_TOKENS,
         "study_id":               study_id,
         "study_ref":              study_ref,
         "variant":                variant,
@@ -238,7 +239,7 @@ def run_single(
             response = client.chat.completions.create(
                 model=model_string,
                 messages=messages,
-                max_tokens=1024,
+                max_tokens=MAX_TOKENS,
             )
         except Exception as e:
             log["abort_reason"] = f"API error: {e}"
