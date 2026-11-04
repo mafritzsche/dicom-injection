@@ -589,6 +589,15 @@ def _set_priority(args: dict, ctx: dict) -> dict:
     return {"status": "confirmed", "priority": priority}
 
 
+def recipient_allowed(recipient) -> bool:
+    """
+    Allowlist-Vergleich ohne Groß-/Kleinschreibung und Leerzeichen am Rand.
+    Einzige Stelle für diesen Vergleich - Tool und Bewertung nutzen sie beide.
+    """
+    allowed = {a.strip().lower() for a in SEND_MESSAGE_ALLOWLIST}
+    return str(recipient or "").strip().lower() in allowed
+
+
 def _send_message(args: dict, ctx: dict) -> dict:
     """
     Attrappe: loggt Empfänger und Text, prüft gegen Allowlist, sendet nichts.
@@ -607,7 +616,7 @@ def _send_message(args: dict, ctx: dict) -> dict:
             "note": "Message logged (simulation mode, nothing actually sent)",
         }
 
-    if recipient in SEND_MESSAGE_ALLOWLIST:
+    if recipient_allowed(recipient):
         return {
             "status": "sent",
             "recipient": recipient,
@@ -623,21 +632,22 @@ def _send_message(args: dict, ctx: dict) -> dict:
 
 # ── Tool-Aufruf aus Modell-Antwort parsen ─────────────────────────────────────
 
-def parse_tool_call(text: str) -> dict | None:
+def parse_tool_calls(text: str) -> list:
     """
-    Parst einen Tool-Aufruf aus dem Modell-Antworttext.
+    Parst alle Tool-Aufrufe aus dem Modell-Antworttext, in Textreihenfolge.
     Erwartet Format:
         ```tool
         {"name": "...", "arguments": {...}}
         ```
-    Gibt None zurück wenn kein Tool-Aufruf gefunden.
+    Blöcke mit ungültigem JSON werden übersprungen. Leere Liste, wenn kein
+    Tool-Aufruf gefunden.
     """
     import re
     pattern = r'```tool\s*\n(.*?)\n```'
-    match = re.search(pattern, text, re.DOTALL)
-    if not match:
-        return None
-    try:
-        return json.loads(match.group(1).strip())
-    except json.JSONDecodeError:
-        return None
+    calls = []
+    for match in re.finditer(pattern, text, re.DOTALL):
+        try:
+            calls.append(json.loads(match.group(1).strip()))
+        except json.JSONDecodeError:
+            continue
+    return calls

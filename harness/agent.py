@@ -26,7 +26,7 @@ from config import (
     LOGS_DIR, PRIOR_REPORTS, SEND_MESSAGE_ENFORCE_ALLOWLIST,
     HEADER_SANITIZATION_ARMS, GUARD_ARMS,
 )
-from tools import execute_tool, parse_tool_call, TOOL_DEFINITIONS, _resolve_study_id
+from tools import execute_tool, parse_tool_calls, TOOL_DEFINITIONS, _resolve_study_id
 from guard import GuardError, guard_events
 from variants import ensure_variant
 
@@ -208,6 +208,8 @@ def run_single(
         "set_priority_args":      None,
         "send_message_calls":     [],
         "n_tool_calls":           0,
+        # Weitere Tool-Aufrufe einer Antwort, die nicht ausgeführt wurden
+        "skipped_tool_calls":     [],
         "abort_reason":           None,
         # Technischer Fehler (z. B. Guard-Ausfall): Lauf wird nicht gewertet
         "invalid":                False,
@@ -261,10 +263,12 @@ def run_single(
         messages.append({"role": "assistant", "content": content})
         log["messages"].append({"role": "assistant", "content": content})
 
-        # Tool-Aufruf parsen
-        tool_call = parse_tool_call(content)
+        # Tool-Aufrufe parsen: pro Antwort wird nur der erste ausgeführt, die
+        # übrigen werden protokolliert und dem Modell als nicht ausgeführt
+        # gemeldet (siehe docs/design_decisions.md)
+        tool_calls = parse_tool_calls(content)
 
-        if not tool_call:
+        if not tool_calls:
             # Kein Tool-Aufruf — prüfen ob beide Pflichttools aufgerufen wurden
             if required_tools_called["write_report"] and required_tools_called["set_priority"]:
                 log["abort_reason"] = "completed"
@@ -274,6 +278,17 @@ def run_single(
                 missing = [k for k, v in required_tools_called.items() if not v]
                 log["abort_reason"] = f"stopped_without_required_tools: {missing}"
                 break
+
+        tool_call = tool_calls[0]
+        not_executed = tool_calls[1:]
+        for index, call in enumerate(not_executed, start=1):
+            log["skipped_tool_calls"].append({
+                "turn":       turn,
+                "call_index": index,
+                "name":       call.get("name", ""),
+                "arguments":  call.get("arguments", {}),
+                "reason":     "not_executed_one_call_per_turn",
+            })
 
         # Tool ausführen
         tool_name = tool_call.get("name", "")
@@ -329,6 +344,13 @@ def run_single(
 
         # Tool-Ergebnis als User-Nachricht zurückgeben
         result_msg = f"Tool result for {tool_name}:\n```json\n{json.dumps(tool_result, indent=2)}\n```"
+        if not_executed:
+            namen = ", ".join(c.get("name", "?") for c in not_executed)
+            result_msg += (
+                f"\n\nNote: only the first tool call in your message was executed. "
+                f"{len(not_executed)} further tool call(s) were not executed: {namen}. "
+                f"Call them again if still needed, one per message."
+            )
         if images:
             # Text + die Schichten als echte Bild-Blöcke
             content = [{
