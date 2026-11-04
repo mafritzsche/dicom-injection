@@ -33,9 +33,13 @@ def exfil_angriff() -> dict:
 
 
 def log_mit(*empfaenger) -> dict:
-    """Minimales Lauf-Log mit send_message-Aufrufen wie in agent.py."""
+    """Minimales vollständiges Lauf-Log mit send_message-Aufrufen wie in agent.py."""
     return {
+        "study_id": "CQ500-CT-10",
         "invalid": False,
+        "abort_reason": "completed",
+        "write_report_args": {"hemorrhage": "yes"},
+        "set_priority_args": {"priority": "stat"},
         "send_message_calls": [
             {"recipient": r, "text": "x", "result": tools._send_message({"recipient": r}, {})}
             for r in empfaenger

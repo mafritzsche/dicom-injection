@@ -36,7 +36,11 @@ from config import (
     ARM_IMPLEMENTED, MODELS, N_REPETITIONS, PRIOR_REPORTS, SUBSET_CSV, LOGS_DIR,
     GUARD_ARMS,
 )
-from scoring import attack_success, is_applicable
+from scoring import (
+    attack_success, attack_success_extended, is_applicable, not_evaluable_reason,
+    run_status, external_send,
+    COMPLETED, ABORTED_NO_REPORT, INCOMPLETE_NO_PRIORITY, MAX_TOOL_CALLS, INVALID,
+)
 
 
 # ── Daten laden ──────────────────────────────────────────────────────────────
@@ -272,11 +276,10 @@ def execute(plan: list, args, done: dict) -> list:
         if key in done and not args.no_resume:
             # Bewertung aus dem vorhandenen Log neu berechnen, damit auch alte
             # Protokolle ohne _success-Feld in die Aggregate eingehen
-            ok = None
+            full = None
             try:
                 with open(done[key]["log_path"], encoding="utf-8") as f:
                     full = json.load(f)
-                ok = attack_success(full, p["attack"], p["ground_truth"])
             except Exception:
                 pass
 
@@ -284,9 +287,10 @@ def execute(plan: list, args, done: dict) -> list:
                 "arm": p["arm"], "prompt_version": p["arm"], "model": p["model"],
                 "study_id": p["study_id"], "attack_id": p["attack_id"],
                 "rep": p["rep"], "ground_truth": p["ground_truth"],
-                "target": p["attack"].get("target", ""), "success": ok,
+                "target": p["attack"].get("target", ""),
+                **_bewertung(full, p["attack"], p["ground_truth"]),
                 "prompt_only_arm": False,
-                "log_path": done[key].get("log_path"), "skipped": True,
+                "log_path": done[key].get("log_path"), "resumed": True,
             })
             if args.verbose:
                 print(f"[{i}/{gesamt}] übersprungen (vorhanden): {key}")
@@ -325,12 +329,33 @@ def execute(plan: list, args, done: dict) -> list:
             "arm": p["arm"], "prompt_version": p["arm"], "model": p["model"],
             "study_id": p["study_id"], "attack_id": p["attack_id"],
             "rep": p["rep"], "ground_truth": p["ground_truth"],
-            "target": p["attack"].get("target", ""), "success": ok,
+            "target": p["attack"].get("target", ""),
+            **_bewertung(log, p["attack"], p["ground_truth"]),
             "prompt_only_arm": log["_prompt_only_arm"],
-            "log_path": str(path), "skipped": False,
+            "log_path": str(path), "resumed": False,
         })
 
     return records
+
+
+def _bewertung(log: dict | None, attack: dict, ground_truth: bool) -> dict:
+    """
+    Bewertung und Laufstatus eines Laufs für results.csv. external_send und
+    priority_set zeigen auch bei unvollständigen Läufen, ob ein Schaden
+    entstanden ist.
+    """
+    if log is None:
+        return {"success": None, "success_extended": None, "run_status": INVALID,
+                "not_evaluable_reason": INVALID,
+                "external_send": None, "priority_set": None}
+    return {
+        "success":              attack_success(log, attack, ground_truth),
+        "success_extended":     attack_success_extended(log, attack, ground_truth),
+        "run_status":           run_status(log),
+        "not_evaluable_reason": not_evaluable_reason(log, attack, ground_truth),
+        "external_send":        external_send(log),
+        "priority_set":         (log.get("set_priority_args") or {}).get("priority"),
+    }
 
 
 def _log_path(log: dict) -> Path | None:
@@ -350,7 +375,8 @@ def write_results(records: list):
     path = LOGS_DIR / "results.csv"
     felder = [
         "arm", "model", "study_id", "attack_id", "target", "rep",
-        "ground_truth", "success", "prompt_only_arm", "skipped", "log_path",
+        "ground_truth", "success", "success_extended", "run_status", "not_evaluable_reason",
+        "external_send", "priority_set", "prompt_only_arm", "resumed", "log_path",
     ]
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=felder, extrasaction="ignore")
@@ -360,26 +386,51 @@ def write_results(records: list):
     return path
 
 
+LAUFSTATUS = [COMPLETED, ABORTED_NO_REPORT, INCOMPLETE_NO_PRIORITY, MAX_TOOL_CALLS, INVALID]
+
+
 def summary(records: list) -> dict:
-    zellen = defaultdict(lambda: [0, 0, 0])  # (arm, model, attack) -> [ok, n, skipped]
+    """
+    Pro (Arm, Modell, Attacke): Erfolge und bewertete Läufe, dazu alle Läufe
+    nach Laufstatus und die nicht bewerteten nach Grund. Abbrüche werden so
+    separat berichtet (Protokoll), statt in der Erfolgsrate zu verschwinden.
+    Die erweiterte Rate ist die vorab festgelegte Sensitivitätsanalyse
+    (siehe docs/design_decisions.md).
+    """
+    zellen = defaultdict(lambda: {
+        "successes": 0, "evaluated": 0,
+        "successes_extended": 0, "evaluated_extended": 0,
+        "run_status": {s: 0 for s in LAUFSTATUS},
+        "not_evaluable": defaultdict(int),
+    })
     for r in records:
-        key = (r["arm"], r["model"], r["attack_id"])
+        z = zellen[(r["arm"], r["model"], r["attack_id"])]
+        z["run_status"][r["run_status"]] += 1
+        if r.get("success_extended") is not None:
+            z["evaluated_extended"] += 1
+            if r["success_extended"]:
+                z["successes_extended"] += 1
         if r.get("success") is None:
-            zellen[key][2] += 1
+            z["not_evaluable"][r["not_evaluable_reason"]] += 1
             continue
-        zellen[key][1] += 1
+        z["evaluated"] += 1
         if r["success"]:
-            zellen[key][0] += 1
+            z["successes"] += 1
 
     out = {}
-    for (arm, model, attack), (ok, n, skip) in sorted(
+    for (arm, model, attack), z in sorted(
         zellen.items(), key=lambda kv: tuple(str(x) for x in kv[0])
     ):
         out.setdefault(arm or "?", {}).setdefault(model or "?", {})[attack] = {
-            "successes": ok,
-            "evaluated": n,
-            "skipped": skip,
-            "rate": round(ok / n, 3) if n else None,
+            "successes":     z["successes"],
+            "evaluated":     z["evaluated"],
+            "rate":          round(z["successes"] / z["evaluated"], 3) if z["evaluated"] else None,
+            "successes_extended": z["successes_extended"],
+            "evaluated_extended": z["evaluated_extended"],
+            "rate_extended": (round(z["successes_extended"] / z["evaluated_extended"], 3)
+                              if z["evaluated_extended"] else None),
+            "run_status":    z["run_status"],
+            "not_evaluable": dict(z["not_evaluable"]),
         }
     return out
 
@@ -388,14 +439,28 @@ def print_summary(summary_data: dict):
     for arm, model_data in summary_data.items():
         print(f"\nArm {arm}")
         for model, attack_data in model_data.items():
+            status = defaultdict(int)
+            for v in attack_data.values():
+                for s, n in v["run_status"].items():
+                    status[s] += n
             werte = [v for v in attack_data.values() if v["rate"] is not None]
             if not werte:
                 print(f"  {model}: keine bewertbaren Läufe")
-                continue
-            gesamt_n = sum(v["evaluated"] for v in werte)
-            gesamt_ok = sum(v["successes"] for v in werte)
-            print(f"  {model}: {gesamt_ok}/{gesamt_n} erfolgreich "
-                  f"({gesamt_ok / gesamt_n:.1%}) über {len(werte)} Attacken")
+            else:
+                gesamt_n = sum(v["evaluated"] for v in werte)
+                gesamt_ok = sum(v["successes"] for v in werte)
+                print(f"  {model}: {gesamt_ok}/{gesamt_n} erfolgreich "
+                      f"({gesamt_ok / gesamt_n:.1%}) über {len(werte)} Attacken")
+            erw_n  = sum(v["evaluated_extended"] for v in attack_data.values())
+            erw_ok = sum(v["successes_extended"] for v in attack_data.values())
+            if erw_n:
+                print(f"    erweitert (inkl. unvollständiger Läufe): {erw_ok}/{erw_n} "
+                      f"({erw_ok / erw_n:.1%})")
+            print(f"    Läufe: {status[COMPLETED]} vollständig, "
+                  f"{status[ABORTED_NO_REPORT]} Abbruch ohne Befund, "
+                  f"{status[INCOMPLETE_NO_PRIORITY]} ohne Priorität, "
+                  f"{status[MAX_TOOL_CALLS]} Limit erreicht, "
+                  f"{status[INVALID]} ungültig")
 
 
 def preflight(plan: list):
