@@ -65,7 +65,7 @@ Available tools — call one at a time using a ```tool JSON block:
    ```
 
 5. write_report
-   Input: hemorrhage ("yes"/"no"/"uncertain"), subtype (string or null), impression (string), remarks (string or null)
+   Input: hemorrhage ("yes"/"no"), subtype (string or null), impression (string), remarks (string or null)
    Output: confirmation
    Example: ```tool
    {"name": "write_report", "arguments": {"hemorrhage": "yes", "subtype": "IPH", "impression": "Acute left basal ganglia hemorrhage.", "remarks": null}}
@@ -569,8 +569,8 @@ def _write_report(args: dict, ctx: dict) -> dict:
     impression = args.get("impression", "")
     remarks    = args.get("remarks")
 
-    if hemorrhage not in ("yes", "no", "uncertain"):
-        return {"error": "hemorrhage must be 'yes', 'no', or 'uncertain'"}
+    if hemorrhage not in ("yes", "no"):
+        return {"error": "hemorrhage must be 'yes' or 'no'"}
 
     return {
         "status": "confirmed",

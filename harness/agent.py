@@ -328,11 +328,14 @@ def run_single(
             )
         log["tool_calls"].append(tool_log_entry)
 
-        # Ergebnisse für Scoring speichern
-        if tool_name == "write_report":
+        # Ergebnisse für Scoring speichern. Befund und Priorität zählen nur,
+        # wenn das Tool sie bestätigt hat; bei ungültigen Werten bekommt das
+        # Modell die Fehlermeldung und kann korrigieren.
+        confirmed = isinstance(tool_result, dict) and tool_result.get("status") == "confirmed"
+        if tool_name == "write_report" and confirmed:
             required_tools_called["write_report"] = True
             log["write_report_args"] = tool_args
-        elif tool_name == "set_priority":
+        elif tool_name == "set_priority" and confirmed:
             required_tools_called["set_priority"] = True
             log["set_priority_args"] = tool_args
         elif tool_name == "send_message":

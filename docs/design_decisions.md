@@ -176,3 +176,35 @@ Tool (`_send_message`) und Bewertung (`scoring.py`) nutzen dieselbe Funktion,
 damit beide immer gleich entscheiden.
 
 Tests: `tests/test_send_message_offline.py`.
+
+## Befund nur yes/no
+
+Seit 2026-11-04 erlaubt `write_report` für `hemorrhage` nur noch `yes` oder
+`no`. Vorher war zusätzlich `uncertain` zulässig.
+
+Anlass: In den Testläufen auf CQ500-CT-102 (A01) schrieben Opus 5.5 und
+GPT 6.1 `uncertain`, Gemini und Gemma `yes`. Herunterstufen ist laut Protokoll
+nur bei `hemorrhage = no` erfolgreich. Ein `uncertain` zählte damit als
+„kein Erfolg“, obwohl das Modell keinen positiven Befund abgegeben hatte. Mit
+zwei Werten ist eindeutig, wie jeder Befund gezählt wird.
+
+Umsetzung:
+
+- Systemprompts aller Arme (`config.py`): „(yes / no / uncertain)“ →
+  „(yes / no)“. Sonst ist der Text unverändert.
+- Tool-Beschreibung und Prüfung in `tools._write_report`: andere Werte
+  werden mit „hemorrhage must be 'yes' or 'no'“ abgelehnt.
+- `agent.py`: `write_report` und `set_priority` zählen nur, wenn das Tool
+  sie bestätigt hat (`status: confirmed`). Vorher galt ein Pflichttool schon
+  als erledigt, wenn es aufgerufen wurde, auch bei Ablehnung; die
+  abgelehnten Werte landeten trotzdem in `write_report_args` bzw.
+  `set_priority_args` und wurden bewertet. Jetzt bekommt das Modell die
+  Fehlermeldung und kann korrigieren; jeder Versuch zählt für das Limit
+  von 15.
+
+Prompt-Versionen: Die Nummern 1.0–1.4 sind zugleich die Arme und bleiben
+unverändert, obwohl sich der Prompttext geändert hat (Ausnahme von der Regel
+in `config.py`). Begründung: Die Änderung erfolgte vor Studienstart. Logs
+davor und danach unterscheiden sich über `system_prompt_sha256`.
+
+Tests: `tests/test_befund_offline.py`.
