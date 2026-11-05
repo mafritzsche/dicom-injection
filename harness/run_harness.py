@@ -30,7 +30,7 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-from agent import run_single
+from agent import run_single, write_json_atomic
 from config import (
     ATTACK_ARM, ATTACKS_CSV, DEFENSE_ARMS, DEFENSE_THRESHOLD,
     ARM_IMPLEMENTED, MODELS, N_REPETITIONS, PRIOR_REPORTS, SUBSET_CSV, LOGS_DIR,
@@ -322,8 +322,7 @@ def execute(plan: list, args, done: dict) -> list:
         )
         path = _log_path(log)
         if path:
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(log, f, indent=2, ensure_ascii=False)
+            write_json_atomic(path, log)
 
         records.append({
             "arm": p["arm"], "prompt_version": p["arm"], "model": p["model"],

@@ -829,3 +829,65 @@ Im Lauf-Protokoll steht sie als `tool_definitions_sha256` neben
 `system_prompt_sha256`. Damit ist für jeden Lauf belegt, mit welcher Fassung
 von Prompt und Tool-Beschreibung er lief. Logs vor dem 2026-11-05 haben das
 Feld nicht.
+
+## Betrieb: Start in tmux, Neustart und Backup der Logs
+
+Stand 2026-11-05.
+
+### Start
+
+Die Studienläufe laufen auf dem Server in einer tmux-Sitzung, damit sie eine
+getrennte Verbindung überstehen. Die Bildschirmausgabe wird mitgeschrieben:
+
+    tmux new -s studie
+    cd /data/fritzsche/dicom-injection/harness
+    python run_harness.py --phase attack 2>&1 | tee ../logs/run_$(date +%F_%H%M).txt
+
+Verlassen mit Strg+B, dann D; wieder verbinden mit `tmux attach -t studie`.
+Plattenplatz: Ein Lauf-Log hat etwa 30 KB, auf `/data` sind 1,2 TB frei
+(Platte zu 94 % belegt, geteilt) – auch zehntausende Läufe brauchen nur
+wenige GB.
+
+### Neustart (Resume)
+
+Ein abgebrochener Harness wird mit demselben Befehl neu gestartet. Ein Lauf
+ist bestimmt durch Studie, Attacke, Modell, Prompt-Version und Wiederholung.
+Liegt dafür in `logs/` (oberste Ebene) schon ein Log, wird der Lauf
+übersprungen und aus dem vorhandenen Log bewertet.
+
+- Ein Lauf schreibt sein Log erst am Ende. Bricht der Harness mitten im Lauf
+  ab, gibt es kein Log, und der Lauf wird beim Neustart vollständig wiederholt.
+- Logs werden atomar geschrieben (temporäre Datei, dann Umbenennen,
+  `agent.write_json_atomic`). Ein Abbruch beim Schreiben hinterlässt keine
+  halbe Datei.
+- Läufe mit API-Fehler (`abort_reason` beginnt mit „API error“) und ungültige
+  Läufe (Guard-Ausfall) gelten nicht als erledigt und werden wiederholt. Ihr
+  Log bleibt zur Dokumentation liegen; die Wiederholung bekommt ein eigenes
+  Log mit späterer Startzeit.
+- Maßgeblich für die Auswertung ist `results.csv`: Sie enthält jeden Lauf
+  genau einmal und verweist auf das gültige Log. Wer die Logs direkt
+  auswertet, muss Logs mit API-Fehler ausschließen.
+
+`tests/test_resume_offline.py` sichert das ab: Plan nach drei Läufen
+abbrechen (einer davon mit API-Fehler), neu starten, prüfen, dass erledigte
+Läufe nicht erneut laufen, der abgebrochene und der fehlerhafte Lauf genau
+einmal wiederholt werden und `results.csv` jeden Lauf genau einmal enthält;
+ein dritter Start führt nichts mehr aus.
+
+### Backup
+
+`harness/backup_logs.sh` kopiert stündlich (Crontab von fritzsche,
+`0 * * * *`) die Lauf-Logs, `results.csv`, `summary.json` und die
+tmux-Mitschnitte (`run_*.txt`) aus `logs/` (oberste Ebene, ohne
+Pilot-Unterordner) auf das MRI-Netzlaufwerk:
+
+    \\mri-p-u-evs.mri.tu-muenchen.de\USER$\v0363\dicom-injection\Logs
+    (= U:\dicom-injection\Logs)
+
+Die Anmeldung läuft über `~/.smbcredentials` (nur für den Nutzer lesbar).
+Gleichnamige Dateien werden überschrieben, auf dem Server gelöschte bleiben
+auf U: erhalten; keine Versionsgeschichte, da `results.csv` und
+`summary.json` jederzeit aus den Logs neu erzeugt werden können. Jeder
+Durchlauf schreibt eine Zeile (ok/FEHLER) nach `logs/backup.log`. Nach einer
+Passwortänderung muss `~/.smbcredentials` angepasst werden, sonst schlägt das
+Backup fehl.

@@ -12,6 +12,7 @@ Ein Lauf:
 """
 
 import json
+import os
 import time
 import re
 import hashlib
@@ -407,6 +408,22 @@ def _save_log(log: dict):
         f"__v{log['system_prompt_version']}"
         f"__rep{log['repetition']}__{log['started_at'][:19].replace(':', '-')}.json"
     )
-    path = LOGS_DIR / fname
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(log, f, indent=2, ensure_ascii=False)
+    write_json_atomic(LOGS_DIR / fname, log)
+
+
+def write_json_atomic(path: Path, data: dict):
+    """
+    Schreibt JSON erst in eine temporäre Datei und benennt sie dann um. Bricht
+    der Prozess mitten im Schreiben ab, bleibt kein halbes Log liegen, das
+    beim Neustart neben dem wiederholten Lauf stünde.
+    """
+    tmp = path.with_name(path.name + ".tmp")
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
