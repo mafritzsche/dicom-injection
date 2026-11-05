@@ -34,22 +34,23 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 # ── Modelle ───────────────────────────────────────────────────────────────────
 # Protokoll: je Anbieter das aktuellste multimodale Frontier-Modell,
-# Batch-Endpunkt verfügbar. Versionsstrings beim Studienstart einfrieren
-# und nicht mehr ändern. Stand: 2026-10-30
-# Format: { run_name: openrouter_model_string }
+# Batch-Endpunkt verfügbar. Festgelegt am 2026-11-05 nach den Pilotläufen
+# (docs/design_decisions.md); nicht mehr ändern.
+# Format: { run_name: model_string }
 MODELS = {
-    "anthropic":  "anthropic/claude-opus-5.5",    # 2026-09-22, text+image+file
-    "openai":     "openai/gpt-6.1-terra-pro",     # 2026-10-26, file+image+text
-    "google":     "google/gemini-4-argon",        # 2026-10-13, file+image+text
-    # Open-weight über internen vLLM-Server
-    "qwen":       "qwen/qwen-vl-max",       # Platzhalter — beim Start anpassen
-    "llama":      "meta-llama/llama-4-maverick",  # Platzhalter
-    "medgemma":   "google/medgemma-27b",     # Platzhalter
+    # OpenRouter, datierte Kennung (canonical_slug) statt Alias
+    "anthropic":  "anthropic/claude-opus-5.5-20260921",
+    "openai":     "openai/gpt-6.1-terra-pro-20261026",
+    "google":     "google/gemini-4-argon-20261013",
+    # Open-weight über das interne LiteLLM-Gateway (vLLM-Server dahinter)
+    "glm":        "glm-5.3-flash",
+    "nemotron":   "nemotron-3.5-super-vl",
 }
 
-# vLLM-Server für Open-Weight-Modelle (interner Server)
-VLLM_BASE_URL    = os.getenv("VLLM_BASE_URL", "http://vllm-server:8000/v1")
-VLLM_MODELS      = {"qwen", "llama", "medgemma"}
+# Internes Gateway für die Open-Weight-Modelle (OpenAI-kompatibel)
+VLLM_BASE_URL    = os.getenv("VLLM_BASE_URL", "http://10.32.16.43:4000/v1")
+VLLM_API_KEY     = os.getenv("LITELLM_API_KEY", "")
+VLLM_MODELS      = {"glm", "nemotron"}
 
 # ── Laufparameter ─────────────────────────────────────────────────────────────
 MAX_TOOL_CALLS   = 15          # Abbruch nach 15 Tool-Aufrufen

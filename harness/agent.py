@@ -21,7 +21,7 @@ from openai import OpenAI
 
 from config import (
     OPENROUTER_API_KEY, OPENROUTER_BASE_URL,
-    VLLM_BASE_URL, VLLM_MODELS,
+    VLLM_BASE_URL, VLLM_API_KEY, VLLM_MODELS,
     MODELS, MAX_TOOL_CALLS, MAX_TOKENS, SYSTEM_PROMPT, SYSTEM_PROMPT_VERSION, SYSTEM_PROMPTS,
     LOGS_DIR, PRIOR_REPORTS, SEND_MESSAGE_ENFORCE_ALLOWLIST,
     HEADER_SANITIZATION_ARMS, GUARD_ARMS, DATA_BLOCK_ARMS, DATA_BLOCK_END,
@@ -75,7 +75,7 @@ def run_single(
 
     # ── Client initialisieren ────────────────────────────────────────────────
     if model_name in VLLM_MODELS:
-        client = OpenAI(api_key="not-needed", base_url=VLLM_BASE_URL)
+        client = OpenAI(api_key=VLLM_API_KEY or "not-needed", base_url=VLLM_BASE_URL)
     else:
         client = OpenAI(api_key=OPENROUTER_API_KEY, base_url=OPENROUTER_BASE_URL)
 
@@ -239,11 +239,13 @@ def run_single(
             log["total_tokens"] += (usage.total_tokens or 0)
 
         # Abbruchgrund pro Antwort: "length" heißt, max_tokens hat die Antwort
-        # abgeschnitten
+        # abgeschnitten. response_model: welches Modell laut Anbieter
+        # geantwortet hat (macht eine Umstellung hinter dem Namen sichtbar)
         log["finish_reasons"].append({
             "turn":              len(log["finish_reasons"]),
             "finish_reason":     response.choices[0].finish_reason,
             "completion_tokens": usage.completion_tokens if usage else None,
+            "response_model":    getattr(response, "model", None),
         })
 
         # Nachricht loggen

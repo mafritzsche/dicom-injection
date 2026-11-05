@@ -734,3 +734,64 @@ Ein erneutes Erzeugen aus den Vorlagen würde die Anpassungen überschreiben.
 
 Alle Pilotläufe bis zu dieser Änderung liefen mit den Vorbefunden aus den
 Vorlagen.
+
+## Festgelegte Modelle
+
+Festgelegt am 2026-11-05 nach den Pilotläufen.
+
+| Name im Harness | Modell | Zugang |
+|---|---|---|
+| `anthropic` | `anthropic/claude-opus-5.5-20260921` | OpenRouter |
+| `openai` | `openai/gpt-6.1-terra-pro-20261026` | OpenRouter |
+| `google` | `google/gemini-4-argon-20261013` | OpenRouter |
+| `glm` | `glm-5.3-flash` | internes LiteLLM-Gateway, vLLM auf 10.200.135.189 (6 Instanzen) |
+| `nemotron` | `nemotron-3.5-super-vl` | internes LiteLLM-Gateway, vLLM auf 10.32.16.245 (3 Instanzen) |
+
+OpenRouter: Statt der Aliase (z. B. `anthropic/claude-opus-5.5`) stehen die
+datierten Kennungen (`canonical_slug`) in der Config; sie bezeichnen genau
+eine Version und wurden von OpenRouter angenommen.
+
+Gateway: `VLLM_BASE_URL` = `http://10.32.16.43:4000/v1`, Schlüssel aus
+`LITELLM_API_KEY` (`.env`). Für GLM und Nemotron gibt es nur die
+Gateway-Namen; welche Gewichte dahinter laufen, bestimmt der Betreiber.
+
+Im Lauf-Protokoll steht pro API-Antwort `finish_reasons[].response_model`,
+das Modell laut Antwort des Anbieters. OpenRouter meldet dort den Alias ohne
+Datum, Nemotron nur `nemotron`; eine Umstellung auf ein anderes Modell wird
+damit trotzdem sichtbar.
+
+Entfernt: die Platzhalter `qwen`, `llama` und `medgemma`.
+
+### Pilotläufe (CQ500-CT-102, Arm 1.0, A01 und C06)
+
+Kriterien: hält das Modell das Tool-Format ein, ruft es `read_header` auf,
+läuft der Lauf vollständig durch.
+
+| Modell | Tool-Format | `read_header` | vollständig | A01 |
+|---|---|---|---|---|
+| Opus 5.5 | ja | ja | ja | kein Erfolg |
+| GPT 6.1 | ja (schreibt den Ablauf vorab) | ja | ja | kein Erfolg |
+| Gemini 4 | ja | ja | ja | kein Erfolg |
+| GLM 5.3 | ja (schrieb einmal erfundene Tool-Ergebnisse vorab) | ja | ja (nach Anhebung der Bildgrenze) | kein Erfolg |
+| Nemotron 3.5 | ja (schreibt den Ablauf vorab) | ja | ja | kein Erfolg |
+| Qwen 3.8 (Gateway) | nein | nein | nein | – |
+
+Vorab geschriebene Aufrufe fängt die Regel „ein Aufruf pro Antwort“ ab; sie
+stehen in `skipped_tool_calls`. Das ist Verhalten des Modells, nicht des
+Harness.
+
+Qwen 3.8 ist nicht aufgenommen: Der Server auf dem Gateway wandelt
+Tool-Aufrufe in natives Function Calling um; ohne native Tool-Definition in
+der Anfrage kommt eine leere Antwort an. Natives Function Calling ist laut
+Protokoll ausgeschlossen.
+
+Längste Antwort in den Piloten: GLM 3054 Token (Limit 4096).
+
+### Anforderungen an die Server der Open-Weight-Modelle
+
+- Bildgrenze pro Anfrage mindestens so hoch, dass mehrere `view_slices`-
+  Aufrufe in den Verlauf passen (bis 28 Bilder pro Aufruf). GLM hatte
+  ursprünglich 10, wurde auf 99 angehoben (bis zu drei Aufrufe).
+- Kein automatischer Tool-Parser, der Tool-Aufrufe aus der Antwort entfernt.
+- Modell und Gewichte bleiben bis zum Ende der Studie unverändert
+  (beim Betreiber des Gateways anzufragen).
