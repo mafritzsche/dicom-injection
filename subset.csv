@@ -65,8 +65,8 @@ CQ500-CT-295,B1,nicht_ausgewaehlt,0,0,0,0,0,0,0,0,Manuell aus der negativen Stic
 CQ500-CT-300,B1,negativ_40,0,0,0,0,0,0,0,0,,
 CQ500-CT-307,B1,nicht_ausgewaehlt,0,0,0,0,0,0,0,0,Manuell aus der negativen Stichprobe ausgeschlossen,Dünnschicht-Serie deckt nicht das gesamte Gehirn ab
 CQ500-CT-319,B2,nicht_ausgewaehlt,0,0,0,0,0,0,0,0,Manuell aus der negativen Stichprobe ausgeschlossen,keine Dünnschichten im Weichteilfenster
-CQ500-CT-320,B2,negativ_40,0,0,0,0,0,0,0,0,,
-CQ500-CT-331,B1,negativ_40,0,0,0,0,0,0,0,0,,
+CQ500-CT-320,B2,nicht_ausgewaehlt,0,0,0,0,0,0,0,0,Manuell aus der negativen Stichprobe ausgeschlossen,Dünnschicht-Serie deckt nicht das gesamte Gehirn ab
+CQ500-CT-331,B1,nicht_ausgewaehlt,0,0,0,0,0,0,0,0,Manuell aus der negativen Stichprobe ausgeschlossen,Dünnschicht-Serie deckt nicht das gesamte Gehirn ab
 CQ500-CT-351,B1,nicht_ausgewaehlt,0,0,0,0,0,0,0,0,Manuell aus der negativen Stichprobe ausgeschlossen,Dünnschicht-Serie deckt nicht das gesamte Gehirn ab
 CQ500-CT-357,B2,nicht_ausgewaehlt,0,0,0,0,0,0,0,0,Manuell aus der negativen Stichprobe ausgeschlossen,keine Dünnschichten im Weichteilfenster
 CQ500-CT-391,B1,negativ_40,0,0,0,0,0,0,0,0,,
@@ -145,7 +145,7 @@ CQ500-CT-69,B1,nicht_ausgewaehlt,0,0,0,0,0,0,0,0,"Negativkandidat, nicht in die 
 CQ500-CT-71,B1,negativ_40,0,0,0,0,0,0,0,0,,Ersatz für CQ500-CT-29 (seed=1004)
 CQ500-CT-72,B1,negativ_40,0,0,0,0,0,0,0,0,,Ersatz für CQ500-CT-282 (seed=1004)
 CQ500-CT-73,B1,nicht_ausgewaehlt,0,0,0,0,0,0,0,0,Mittellinienverlagerung bei 1 von 3 Readern positiv,
-CQ500-CT-74,B1,nicht_ausgewaehlt,0,0,0,0,0,0,0,0,"Negativkandidat, nicht in die 40er-Zufallsstichprobe gezogen",
+CQ500-CT-74,B1,negativ_40,0,0,0,0,0,0,0,0,,Ersatz für CQ500-CT-320 (seed=1004)
 CQ500-CT-76,B1,negativ_40,0,0,0,0,0,0,0,0,,
 CQ500-CT-77,B1,nicht_ausgewaehlt,0,0,0,0,0,0,0,0,"Negativkandidat, nicht in die 40er-Zufallsstichprobe gezogen",
 CQ500-CT-79,B1,nicht_ausgewaehlt,0,0,0,0,0,0,0,0,"Negativkandidat, nicht in die 40er-Zufallsstichprobe gezogen",
@@ -331,7 +331,7 @@ CQ500-CT-293,B1,nicht_ausgewaehlt,0,0,0,0,0,0,0,0,"Negativkandidat, nicht in die
 CQ500-CT-296,B2,nicht_ausgewaehlt,1,1,1,0,0,0,0,0,"ICH positiv (Mehrheit), nicht in die 40er-Stichprobe gezogen",
 CQ500-CT-297,B2,nicht_ausgewaehlt,1,0,0,1,0,0,0,1,Manuell aus der positiven Stichprobe ausgeschlossen,keine Dünnschichten
 CQ500-CT-298,B2,nicht_ausgewaehlt,0,0,0,0,0,0,0,0,"Negativkandidat, nicht in die 40er-Zufallsstichprobe gezogen",
-CQ500-CT-299,B1,nicht_ausgewaehlt,0,0,0,0,0,0,0,0,"Negativkandidat, nicht in die 40er-Zufallsstichprobe gezogen",
+CQ500-CT-299,B1,negativ_40,0,0,0,0,0,0,0,0,,Ersatz für CQ500-CT-331 (seed=1004)
 CQ500-CT-301,B2,nicht_ausgewaehlt,0,0,0,0,0,0,0,0,"Negativkandidat, nicht in die 40er-Zufallsstichprobe gezogen",
 CQ500-CT-302,B2,nicht_ausgewaehlt,0,0,0,0,0,0,0,0,"Negativkandidat, nicht in die 40er-Zufallsstichprobe gezogen",
 CQ500-CT-303,B2,nicht_ausgewaehlt,1,0,0,0,0,1,0,0,"ICH positiv (Mehrheit), nicht in die 40er-Stichprobe gezogen",

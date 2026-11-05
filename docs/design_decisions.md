@@ -377,3 +377,70 @@ Schriftart: `variants._font` nimmt die erste vorhandene Datei aus
 `_FONT_CANDIDATES`. Auf dem Studienserver ist das DejaVu Sans; auf anderen
 Rechnern (z. B. macOS: Arial) sähe der Text anders aus und könnte anders
 umbrechen. Alle bisherigen Varianten wurden auf dem Studienserver erzeugt.
+
+## Ersatz von CQ500-CT-320 und CQ500-CT-331 (negativ)
+
+Durchgeführt am 2026-11-05.
+
+Anlass: Bei der Prüfung des Bildausschnitts für alle 80 Fälle zeigte sich,
+dass die dünne Serie dieser beiden negativen Fälle den Scheitel nicht
+erreicht. Sie endet oben jeweils rund 33 mm vor der nativen 5-mm-Serie
+derselben Untersuchung:
+
+| Fall | dünne Serie (in Orthanc) | native 5-mm-Serie |
+|---|---|---|
+| CQ500-CT-320 | z −56 bis 68 mm | z −54 bis 101 mm |
+| CQ500-CT-331 | z 2 bis 129 mm | z 4 bis 162 mm |
+
+Der obere Teil des Gehirns lag damit für das Modell nicht vor. Beide Fälle
+wurden wie die bisherigen neun Fälle mit diesem Befund ausgeschlossen:
+Ausschlussgrund „Manuell aus der negativen Stichprobe ausgeschlossen“,
+Kommentar „Dünnschicht-Serie deckt nicht das gesamte Gehirn ab“.
+
+Ziehung: mit demselben Verfahren wie die frühere Ersatzziehung (CT-71 für
+CT-29, CT-72 für CT-282), Skript `negativ_nachziehen.py`:
+
+- Pool: alle Fälle mit Gruppe `nicht_ausgewaehlt` und Ausschlussgrund
+  „Negativkandidat, nicht in die 40er-Zufallsstichprobe gezogen“, nach ID
+  sortiert. Zum Ziehzeitpunkt 170 Fälle.
+- `random.seed(1004)`, `random.sample(pool, 4)`, Python 3.13.5.
+- Gezogen (Zufallsreihenfolge): CT-299, CT-74, CT-462, CT-394.
+- Geprüft wurde wie bisher in aufsteigender ID-Reihenfolge: CT-74, CT-299,
+  CT-394, CT-462. Die ersten beiden erfüllten die Kriterien und wurden
+  übernommen; CT-394 und CT-462 blieben im Pool.
+- Keine Schichtung nach Kategorie B1/B2. Beide neuen Fälle sind B1; die
+  negativen 40 stehen damit bei 28 B1 / 12 B2 (vorher 27 / 13).
+
+Prüfung der neuen Fälle: alle drei Reader negativ (ICH und Fraktur);
+dünne Weichteilserie vorhanden und über die native 5-mm-Serie hinaus
+reichend; im Prüfbild der 5-mm-Blöcke oben nur noch Kalotte, unten die
+hintere Schädelgrube enthalten.
+
+| neu | ersetzt | dünne Serie | Bilder |
+|---|---|---|---|
+| CQ500-CT-74 | CQ500-CT-320 | PRE CONTRAST THIN, 0,625 mm, STANDARD | 240 |
+| CQ500-CT-299 | CQ500-CT-331 | Thin Plain, 0,625 mm, STANDARD | 256 |
+
+Zuordnung wie bei der früheren Ziehung: der niedrigere neue Fall ersetzt den
+niedrigeren alten.
+
+Umsetzung:
+
+- `subset.csv`: Zeilen an ihrer Stelle geändert. CT-74 und CT-299 tragen
+  den Kommentar „Ersatz für CQ500-CT-320 (seed=1004)“ bzw.
+  „Ersatz für CQ500-CT-331 (seed=1004)“.
+- Vorbefunde: Die Datei des ersetzten Falls wurde unter der neuen ID
+  übernommen, nur die Kopfzeile geändert. In `prior_reports_mapping.csv`
+  steht der neue Fall mit derselben Nummer (T00, 15 bzw. 16). Die
+  Textvariante ergibt sich aus Nummer modulo 3; die Verteilung der drei
+  Varianten bei den negativen Fällen bleibt 14 / 13 / 13. Die Dateien von
+  CT-320 und CT-331 wurden entfernt.
+- Orthanc: CT-320 und CT-331 gelöscht, die dünnen Serien von CT-74 und
+  CT-299 hochgeladen. `orthanc_80_manifest.json`: Einträge an ihrer Stelle
+  ersetzt.
+
+Hinweis zur Reproduzierbarkeit: Das Ergebnis einer Ziehung hängt vom Pool
+zum Ziehzeitpunkt ab. Die frühere Ziehung (CT-71, CT-72) lässt sich aus der
+heutigen `subset.csv` nicht mehr exakt nachstellen, vermutlich weil damals
+noch Kandidaten im Pool waren, die später verworfen wurden. Für diese
+Ziehung sind Poolgröße und Ergebnis deshalb hier festgehalten.
