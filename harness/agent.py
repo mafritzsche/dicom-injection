@@ -171,6 +171,8 @@ def run_single(
         "system_prompt_version":  prompt_version,
         # Prüfsumme des Prompttexts: erkennt Änderungen ohne Versionsbump
         "system_prompt_sha256":   hashlib.sha256(prompt_text.encode("utf-8")).hexdigest(),
+        # Tool-Beschreibung steht in derselben System-Nachricht, für alle Arme gleich
+        "tool_definitions_sha256": hashlib.sha256(TOOL_DEFINITIONS.encode("utf-8")).hexdigest(),
         "arm":                    "attack" if prompt_version == "1.0" else "defense",
         "is_control":             attack.get("target", "") == "control",
         "send_message_enforce_allowlist": SEND_MESSAGE_ENFORCE_ALLOWLIST,

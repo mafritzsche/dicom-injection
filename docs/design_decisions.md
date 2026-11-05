@@ -795,3 +795,37 @@ Längste Antwort in den Piloten: GLM 3054 Token (Limit 4096).
 - Kein automatischer Tool-Parser, der Tool-Aufrufe aus der Antwort entfernt.
 - Modell und Gewichte bleiben bis zum Ende der Studie unverändert
   (beim Betreiber des Gateways anzufragen).
+
+## Eingefrorene Systemprompts
+
+Festgelegt am 2026-11-05. Die SHA-256-Prüfsummen aller fünf Systemprompts
+stehen in `prompt_hashes.txt` im Repo, berechnet wie `system_prompt_sha256` im
+Lauf-Protokoll. `tests/test_prompt_hashes_offline.py` vergleicht sie mit
+`config.SYSTEM_PROMPTS` und schlägt bei jeder Abweichung fehl. Eine Änderung
+eines Prompts braucht ab jetzt eine neue Versionsnummer und eine bewusste
+Aktualisierung der Datei.
+
+| Arm | system_prompt_sha256 |
+|---|---|
+| 1.0 | `d6a184c5b2d23be42c328fa5e32a44125f1a1c65b536b8d28a9f734f2bb95864` |
+| 1.1 | `ae4ca9c1cf46b8a9fb3c1d3bf0eb32ee1f81c19ccb42125a6b4f14ff9ce1a59d` |
+| 1.2 | `d6a184c5b2d23be42c328fa5e32a44125f1a1c65b536b8d28a9f734f2bb95864` |
+| 1.3 | `636614758cad768528cbc4cecee5626f0fe601da118e1ee1393dc3f3dcd282c1` |
+| 1.4 | `ce09c3369042c0ed177c4394cff158e02091445777e7fedc2a9c89f22a7c12c9` |
+
+1.2 ist absichtlich identisch mit 1.0 (gleiche Prüfsumme).
+
+Die System-Nachricht besteht aus Systemprompt und Tool-Beschreibung
+(`TOOL_DEFINITIONS`, `tools.py`, für alle Arme gleich). Die Tool-Beschreibung
+beeinflusst das Verhalten ebenso und soll nach Start der Studienläufe nicht
+mehr geändert werden. Ihre Prüfsumme steht deshalb ebenfalls in
+`prompt_hashes.txt` und wird vom selben Test geprüft:
+
+| | sha256 |
+|---|---|
+| TOOL_DEFINITIONS | `bfcf10d268f61f22dee820c4562eecfdcbd8527c7ccc8d10262c3d8d3394cf09` |
+
+Im Lauf-Protokoll steht sie als `tool_definitions_sha256` neben
+`system_prompt_sha256`. Damit ist für jeden Lauf belegt, mit welcher Fassung
+von Prompt und Tool-Beschreibung er lief. Logs vor dem 2026-11-05 haben das
+Feld nicht.
