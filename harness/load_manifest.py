@@ -1,8 +1,11 @@
 """
 load_manifest.py
 ----------------
-Lädt die im Manifest (orthanc_80_manifest.json) gelisteten Serien aus
-cq-500-dicoms/ nach Orthanc.
+Lädt die im Manifest gelisteten Serien nach Orthanc. Standard: die
+gemittelten 5-mm-Serien (orthanc_80_5mm_manifest.json, Dateien in
+cq-500-5mm/, erzeugt mit build_5mm_series.py). Orthanc enthält nur diese;
+die dünnen Quellserien (orthanc_80_manifest.json, cq-500-dicoms/) werden
+nicht hochgeladen.
 
 Pro Manifest-Eintrag wird im Patientenordner die Serie mit passender
 SeriesInstanceUID gesucht und genau die gelisteten SOPInstanceUIDs
@@ -11,7 +14,7 @@ erneuter Lauf ist daher unbedenklich.
 
 Aufruf:
     python load_manifest.py
-    python load_manifest.py --manifest ../orthanc_80_manifest.json --dicom-dir ../cq-500-dicoms
+    python load_manifest.py --manifest ../orthanc_80_5mm_manifest.json --dicom-dir ../cq-500-5mm
 """
 
 import argparse
@@ -53,8 +56,8 @@ def _find_series_dir(patient_dir: Path, series_uid: str):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--manifest", default=REPO_ROOT / "orthanc_80_manifest.json", type=Path)
-    ap.add_argument("--dicom-dir", default=REPO_ROOT / "cq-500-dicoms", type=Path)
+    ap.add_argument("--manifest", default=REPO_ROOT / "orthanc_80_5mm_manifest.json", type=Path)
+    ap.add_argument("--dicom-dir", default=REPO_ROOT / "cq-500-5mm", type=Path)
     args = ap.parse_args()
 
     requests.get(f"{ORTHANC_URL}/system", auth=_auth(), timeout=10).raise_for_status()

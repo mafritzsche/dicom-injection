@@ -444,3 +444,157 @@ zum Ziehzeitpunkt ab. Die frühere Ziehung (CT-71, CT-72) lässt sich aus der
 heutigen `subset.csv` nicht mehr exakt nachstellen, vermutlich weil damals
 noch Kandidaten im Pool waren, die später verworfen wurden. Für diese
 Ziehung sind Poolgröße und Ergebnis deshalb hier festgehalten.
+
+## Bilddarstellung: gemittelte 5-mm-Blöcke über den Gehirnbereich
+
+Festgelegt am 2026-11-05.
+
+Vorher zeigte `view_slices` 12 gleichmäßig verteilte einzelne dünne
+Schichten (0,5–0,75 mm) über die ganze dünne Serie. Bei CQ500-CT-102 lagen sie
+12,5 mm auseinander; 3 der 12 Bilder zeigten Gesichtsschädel und
+Halswirbelsäule statt Gehirn, die obersten 12 mm wurden nie gezeigt, und jede
+einzelne dünne Schicht rauscht stark.
+
+Betrachtet wurden:
+
+- a) 12 einzelne dünne Schichten über die Serie (bisher)
+- b) eine einzelne dünne Schicht alle 5 mm im Gehirnbereich
+- c) gemittelte 5-mm-Blöcke im Gehirnbereich
+
+Entscheidung: c. Bei b) deckt jedes Bild nur 0,6 von 5 mm ab, rund 90 % des
+Volumens bleiben unsichtbar, und das Rauschen hängt von der Schichtdicke der
+Quellserie ab. Die gemittelten Blöcke decken das Volumen lückenlos ab und
+entsprechen der klinisch üblichen 5-mm-Darstellung.
+
+### Vergleich mit der nativen 5-mm-Serie des Scanners
+
+Für jede native 5-mm-Schicht wurden die dünnen Schichten in deren 5-mm-Bereich
+gemittelt und im Hirngewebe verglichen (gleiche Matrix, Position, keine
+Gantry-Kippung; innerhalb eines Falls haben dünne und native Serie denselben
+Faltungskern):
+
+| | CQ500-CT-102 (SOFT) | CQ500-CT-106 (STANDARD) |
+|---|---|---|
+| Korrelation gemittelt ↔ nativ | 0,967 | 0,978 |
+| mittlere Abweichung (Betrag) | 2,8 HU | 1,9 HU |
+| systematische Verschiebung | +2,6 HU | +0,5 HU |
+| Rauschen der Differenz, gemittelt | 1,8 HU | 2,0 HU |
+| Rauschen der Differenz, einzelne dünne Schicht | 9,0 HU | 8,0 HU |
+
+Größere Abweichungen nur an Knochenkanten und an der Schädelbasis; zum
+Schädeldach hin sind die gemittelten Bilder bis etwa +5 HU heller.
+
+Native 5-mm-Serien werden nicht direkt verwendet: 10 der 80 Fälle haben keine
+native axiale 5-mm-Weichteilserie ohne Kontrastmittel, und die nativen Serien
+reichen über Hals und Schädeldach hinaus. Das Mitteln aus der dünnen Serie ist
+für alle Fälle gleich.
+
+### Gehirnbereich
+
+Pro dünner Schicht wird die Fläche von Gewebe (0–100 HU) innerhalb des
+Schädelknochens gemessen (auf 1/4 verkleinert, Knochen > 250 HU über das
+Maximum je Pixelblock, Inneres per Flutung von außen).
+
+| Regel | Wert |
+|---|---|
+| Knochenlücken schließen | zwei Stärken (2 und 4 Pixel à ~1,8 mm), pro Schicht zählt der größere Wert |
+| obere Grenze | so weit nach oben, wie noch ≥ 1 cm² Gewebe im Schädel liegt |
+| untere Grenze | Fläche (Median über 5 Schichten) ≥ 8 % des Maximums |
+| Messlücke unten | bis 10 mm überbrücken, nur bei schlagartigem Einbruch (vorher ≥ 25 % des Maximums) |
+| Blöcke | 5 mm, nach Position in mm, lückenlos ohne Überlappung; ein Rest unter 2,5 mm geht in den obersten Block |
+
+Ziel: oben bis nur noch Kalotte zu sehen ist (ein schmales SDH an der hohen
+Konvexität soll nicht abgeschnitten werden), unten mit hinterer Schädelgrube,
+ohne Halswirbelsäule.
+
+Geprüft an Übersichtsbildern aller 80 Fälle (Schicht knapp unter und über der
+Grenze). Dabei behoben:
+
+- Lücken in der Messung an der Schädelbasis (offener Knochen über mehrere mm):
+  bei CQ500-CT-416 und CQ500-CT-322 fehlte zunächst die ganze hintere
+  Schädelgrube. Daher das zweistufige Schließen und das Überbrücken.
+- Überbrücken ohne Bedingung sprang bei einigen Fällen (z. B. CT-185, CT-451)
+  in den Hals, wo Unterkiefer und Wirbel genug Weichteil umschließen. Daher
+  die Bedingung „schlagartiger Einbruch“: Am normalen unteren Ende läuft die
+  Fläche aus.
+
+Bewusst belassen: Bei vielen Fällen liegen die untersten Millimeter des
+Kleinhirns knapp unter der Grenze. Das Großhirn ist immer vollständig.
+
+Ergebnis: 22–28 Blöcke pro Fall, Gehirnbereich 107,5–138,8 mm (Median 121 mm).
+Die Blöcke sind 5 mm dick, nur der oberste 3,0–7,6 mm (Rest-Regel); die
+tatsächliche Dicke steht in `SliceThickness`.
+
+Die Prüfung der Grenzen führte auch zum Ersatz von CQ500-CT-320 und
+CQ500-CT-331 (siehe dort).
+
+### Serienname
+
+Der Name der 5-mm-Serie ist der Name der dünnen Serie ohne den Hinweis auf die
+dünne Schicht. Zwei Namen kommen so im CQ500-Datensatz nicht vor; dort gilt der
+Name der nativen 5-mm-Serie derselben Untersuchung:
+
+| dünne Serie | 5-mm-Serie | Fälle |
+|---|---|---|
+| PLAIN THIN | PLAIN | 31 |
+| Thin Plain | Plain | 26 |
+| Plain THIN | Plain | 5 |
+| PRE CONTRAST THIN | PRE CONTRAST 5MM STD | 17 |
+| 0.625mm | 5mm | 1 (CQ500-CT-489) |
+
+Alle fünf Namen stehen in `header_allowlist.json` (aus allen Seriennamen des
+CQ500-Datensatzes); in den Abwehrarmen 1.2/1.4 bleiben sie erhalten.
+
+### DICOM
+
+Pro Block ein Bild, Kopf aus der mittleren dünnen Schicht des Blocks. Gleiche
+Patienten- und StudyInstanceUID wie die Quelle; SeriesInstanceUID und
+SOPInstanceUIDs reproduzierbar aus der Quell-SeriesInstanceUID abgeleitet
+(`variants._det_uid`). `ImageType = DERIVED\SECONDARY\AXIAL`,
+`ImagePositionPatient` in der Blockmitte, `InstanceNumber` von unten nach
+oben, `DerivationDescription` mit Zahl und z-Bereich der gemittelten
+Schichten. Pixel: Mittelwert in HU, auf ganze HU gerundet.
+
+Der eingebrannte Text der Placement „Bild“ ist in jede dünne Schicht
+pixelgleich eingebrannt und bliebe bei einer Mittelung erhalten; da
+`ensure_variant` die Kopie aus der Studie in Orthanc erzeugt, wird er jetzt
+direkt in die 5-mm-Bilder eingebrannt.
+
+### Nur die 5-mm-Serie in Orthanc
+
+Orthanc enthält pro Studie genau diese eine Serie, die dünnen Serien nicht:
+
+- Das Modell sieht eine Serie; eine zweite Serie würde den Header verändern
+  (SeriesDescription-Angriff doppelt) und `view_slices` die alte Darstellung
+  ermöglichen.
+- `ensure_variant` kopiert die ganze Studie: etwa 25 statt 285 Bilder pro
+  Kopie, für rund 2000 Kopien im Angriffsarm etwa 14 statt 150 GB, und
+  entsprechend schnelleres Anlegen.
+- Die dünnen Serien bleiben als Quelle auf der Platte (`cq-500-dicoms/`) und
+  in `orthanc_80_manifest.json` dokumentiert.
+
+Umgestellt am 2026-11-05: 80 Studien, 80 Serien, 1963 Bilder, 984 MB. Die
+dünnen Serien und die Test-Varianten aus den Pipeline-Tests wurden aus
+Orthanc gelöscht.
+
+### view_slices
+
+`view_slices` nimmt die eine Serie der Studie; eine Serienangabe des Modells
+spielt keine Rolle mehr und steht nicht mehr in der Tool-Beschreibung. Gezeigt
+werden alle Blöcke von unten nach oben, höchstens `MAX_SLICES = 40`
+(`config.py`). Die Tool-Beschreibung für das Modell sagt jetzt „all axial
+5 mm slices of the study from skull base to vertex“ statt „up to 12 axial
+slices“.
+
+Die Tool-Beschreibung (`TOOL_DEFINITIONS`) steht in der System-Nachricht, ist
+aber nicht durch `system_prompt_sha256` im Log erfasst. Logs vor und nach
+dieser Änderung unterscheiden sich am Datum und an der Zahl der Bilder in
+`tool_calls` (`n_images`).
+
+Kosten: Pro Lauf gehen 22–28 statt 12 Bilder an das Modell, und sie bleiben
+im Verlauf; der Bildanteil der Token steigt etwa auf das Doppelte.
+
+Dateien: `harness/build_5mm_series.py`, `orthanc_80_5mm_manifest.json`
+(mit Herkunft je Fall und Block), `cq-500-5mm/` (nicht versioniert),
+`harness/load_manifest.py` (Standard jetzt das 5-mm-Manifest).
+Tests: `tests/test_5mm_offline.py`.

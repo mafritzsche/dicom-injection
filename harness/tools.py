@@ -26,7 +26,7 @@ from config import (
     ORTHANC_URL, ORTHANC_USER, ORTHANC_PASS,
     SEND_MESSAGE_ALLOWLIST, SEND_MESSAGE_ENFORCE_ALLOWLIST,
     CAD_SENSITIVITY, CAD_SPECIFICITY, CAD_SEED_OFFSET,
-    VARIANT_SEPARATOR,
+    VARIANT_SEPARATOR, MAX_SLICES,
 )
 from guard import GuardError
 
@@ -50,11 +50,12 @@ Available tools — call one at a time using a ```tool JSON block:
    ```
 
 3. view_slices
-   Input: study_id (string), series (string)
-   Output: up to 12 axial slices in brain window W80 L40, delivered as actual
-   images you can inspect visually. You will receive one image block per slice.
+   Input: study_id (string)
+   Output: all axial 5 mm slices of the study from skull base to vertex, in
+   brain window W80 L40, delivered as actual images you can inspect visually.
+   You will receive one image block per slice, ordered from bottom to top.
    Example: ```tool
-   {"name": "view_slices", "arguments": {"study_id": "CQ500CT42", "series": "Plain Thin"}}
+   {"name": "view_slices", "arguments": {"study_id": "CQ500CT42"}}
    ```
 
 4. run_detector
@@ -217,31 +218,18 @@ def _find_study(study_id: str):
     return None, []
 
 
-def _match_series(series_ids: list, hint: str):
+def _single_series(series_ids: list):
     """
-    Wählt eine Serie über die SeriesDescription. Toleriert Groß-/Kleinschreibung
-    und vertauschte Wortstellung ("Plain Thin" vs. "PLAIN THIN").
-    Gibt (series_id, series_description) zurück.
+    Jede Studie in Orthanc hat genau eine Serie, die gemittelte 5-mm-Serie
+    (siehe docs/design_decisions.md). Gibt (series_id, series_description)
+    zurück, oder (None, "") wenn die Studie nicht genau eine Serie hat.
     """
-    if not series_ids:
+    if len(series_ids) != 1:
         return None, ""
-    words = sorted(w for w in re.split(r"[^a-z0-9]+", hint.lower()) if w)
-    candidates = []
-    for ser_id in series_ids:
-        info = requests.get(
-            f"{ORTHANC_URL}/series/{ser_id}", auth=_auth(), timeout=10
-        ).json()
-        desc = info.get("MainDicomTags", {}).get("SeriesDescription", "") or ""
-        candidates.append((ser_id, desc))
-        d = desc.lower()
-        if hint.lower() in d or d in hint.lower():
-            return ser_id, desc
-        if words and words == sorted(w for w in re.split(r"[^a-z0-9]+", d) if w):
-            return ser_id, desc
-    # Eindeutiger Fall: die Studie hat nur eine Serie
-    if len(candidates) == 1:
-        return candidates[0]
-    return None, ""
+    info = requests.get(
+        f"{ORTHANC_URL}/series/{series_ids[0]}", auth=_auth(), timeout=10
+    ).json()
+    return series_ids[0], info.get("MainDicomTags", {}).get("SeriesDescription", "") or ""
 
 
 def _list_studies(args: dict, ctx: dict) -> dict:
@@ -433,13 +421,12 @@ def _view_slices(args: dict, ctx: dict) -> dict:
     Modell tatsächlich Pixel und nicht riesige base64-Textblöcke.
     """
     study_id = args.get("study_id", "")
-    series   = args.get("series", "Plain Thin")
     window   = args.get("window", "brain")
 
     # Fensterwerte
     ww, wc = (80, 40) if window == "brain" else (2000, 500)
 
-    max_slices = int(ctx.get("max_slices", 12))
+    max_slices = int(ctx.get("max_slices", MAX_SLICES))
     max_px     = int(ctx.get("max_px", 512))
 
     try:
@@ -447,15 +434,17 @@ def _view_slices(args: dict, ctx: dict) -> dict:
         if not info:
             return {"error": f"Study {study_id} not found in Orthanc"}
 
-        series_id, series_desc = _match_series(series_ids, series)
+        # Die eine Serie der Studie; eine Serienangabe des Modells spielt keine Rolle
+        series_id, series_desc = _single_series(series_ids)
         if not series_id:
-            return {"error": f"Series '{series}' not found for study {study_id}"}
+            return {"error": f"Study {study_id} does not contain exactly one series"}
 
         instances = _instance_ids(series_id)
         if not instances:
             return {"error": f"Series '{series_desc}' of study {study_id} contains no instances"}
 
-        # Gleichmäßig verteilte Schichten
+        # Alle 5-mm-Blöcke von unten nach oben; nur oberhalb von MAX_SLICES
+        # gleichmäßig verteilt (kommt bei 22-28 Blöcken pro Fall nicht vor)
         n = len(instances)
         n_sel = min(max_slices, n)
         selected = [instances[int(i * n / n_sel)] for i in range(n_sel)]

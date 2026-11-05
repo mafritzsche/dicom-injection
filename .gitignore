@@ -230,3 +230,4 @@ download-guard-model.txt
 # CQ-500-Daten (lokal, nicht versioniert)
 cq-500-dicoms/
 cq-500-zips/
+cq-500-5mm/

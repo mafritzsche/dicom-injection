@@ -62,6 +62,23 @@ python guard.py        # zeigt Schwelle und Klassifikation von Beispieltexten
 Der Harness prüft das vor dem Start (`preflight`) und bricht sofort ab, wenn der
 Guard für einen gewählten Arm nicht ladbar ist.
 
+## Bilddaten in Orthanc
+
+Orthanc enthält für jede der 80 Studien genau eine Serie: gemittelte
+5-mm-Blöcke über den Gehirnbereich (22–28 Bilder pro Fall). Die Modelle sehen
+mit `view_slices` alle Blöcke einer Studie. Herleitung und Parameter:
+`docs/design_decisions.md`.
+
+```sh
+cd harness
+python build_5mm_series.py   # dünne Serien (cq-500-dicoms/) -> cq-500-5mm/ + orthanc_80_5mm_manifest.json
+python load_manifest.py      # cq-500-5mm/ nach Orthanc
+```
+
+Quelle sind die dünnen Serien aus `orthanc_80_manifest.json`; sie liegen nur auf
+der Platte, nicht in Orthanc. `build_5mm_series.py` erzeugt bei jedem Lauf
+dieselben UIDs und Bilder.
+
 ## Ausführen
 
 Einzellauf:
