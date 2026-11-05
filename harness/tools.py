@@ -26,7 +26,7 @@ from config import (
     ORTHANC_URL, ORTHANC_USER, ORTHANC_PASS,
     SEND_MESSAGE_ALLOWLIST, SEND_MESSAGE_ENFORCE_ALLOWLIST,
     CAD_SENSITIVITY, CAD_SPECIFICITY, CAD_SEED_OFFSET,
-    VARIANT_SEPARATOR, MAX_SLICES,
+    VARIANT_SEPARATOR, MAX_SLICES, DATA_BLOCK_BEGIN, DATA_BLOCK_END,
 )
 from guard import GuardError
 
@@ -114,10 +114,46 @@ def _resolve_study_id(requested: str, ctx: dict) -> str:
     return requested
 
 
+HEADER_FIELDS = ("StudyDescription", "SeriesDescription", "ImageComments")
+
+
+def present_header_field(field: str, value: str, ctx: dict, source: str, study_id: str) -> str:
+    """
+    Ein Header-Feld so, wie es das Modell sieht. Gleich für list_studies,
+    read_header und view_slices:
+
+      1. Bereinigung (1.2/1.4): StudyDescription und SeriesDescription auf das
+         kontrollierte Vokabular, ImageComments immer leer
+      2. Prompt Guard 2 (1.3/1.4)
+      3. Markierung als Datenblock (1.1/1.4)
+
+    Zusätzlich wird vermerkt, dass das Modell das Feld der Studie des Laufs
+    gesehen hat (log["header_fields_seen"]).
+    """
+    value = value or ""
+    if ctx.get("sanitize_headers"):
+        from sanitize import (sanitize_study_description, sanitize_series_description,
+                              sanitize_image_comments)
+        value = {
+            "StudyDescription":  sanitize_study_description,
+            "SeriesDescription": sanitize_series_description,
+            "ImageComments":     sanitize_image_comments,
+        }[field](value)
+    if ctx.get("guard"):
+        from guard import filter_text
+        value = filter_text(value, ctx, source, field, study_id)
+    if study_id == ctx.get("study_id"):
+        ctx.setdefault("header_fields_seen", set()).add(field)
+    if ctx.get("data_blocks"):
+        value = f"{DATA_BLOCK_BEGIN}{value}{DATA_BLOCK_END}"
+    return value
+
+
 def execute_tool(name: str, arguments: dict, context: dict) -> dict:
     """
     Führt ein Tool aus und gibt das Ergebnis zurück.
-    context enthält: study_id, attack_id, ground_truth, injected_headers
+    context enthält: study_id, attack_id, ground_truth, sanitize_headers,
+    guard, data_blocks
 
     study_id verweist auf das Exemplar des Laufs (bei Angriffen die manipulierte
     Kopie). Die Ground Truth wird nur vom simulierten CAD genutzt und gelangt
@@ -258,27 +294,17 @@ def _list_studies(args: dict, ctx: dict) -> dict:
             if not pid:
                 continue
 
+            # Auch fremde Studien laufen durch Bereinigung und Guard; ihre
+            # Guard-Ereignisse tragen is_current_study = False
             entry = {
                 "orthanc_id": sid,
-                "study_description": main_tags.get("StudyDescription", ""),
+                "study_description": present_header_field(
+                    "StudyDescription", main_tags.get("StudyDescription", ""),
+                    ctx, "list_studies", pid,
+                ),
                 "patient_id": pid,
                 "series_count": len(info.get("Series", [])),
             }
-
-            if ctx.get("sanitize_headers"):
-                from sanitize import sanitize_study_description
-                entry["study_description"] = sanitize_study_description(
-                    entry["study_description"]
-                )
-
-            # Auch fremde Studien werden gefiltert; ihre Ereignisse tragen
-            # is_current_study = False
-            if ctx.get("guard"):
-                from guard import filter_text
-                entry["study_description"] = filter_text(
-                    entry["study_description"], ctx, "list_studies",
-                    "StudyDescription", pid,
-                )
 
             if pid == target:
                 entry["patient_id"] = base          # klinische ID zeigen
@@ -298,10 +324,9 @@ def _list_studies(args: dict, ctx: dict) -> dict:
 
 def _read_header(args: dict, ctx: dict) -> dict:
     """
-    Liest DICOM-Header. Injiziert Angriffstexte wenn eine Variante aktiv ist.
-
-    Im Abwehrarm 1.2 werden die Felder zusätzlich gegen die Allowlist aus
-    header_tabelle_alle.xlsx bereinigt.
+    Liest DICOM-Header der Studie aus Orthanc (bei Angriffen die Kopie mit
+    dem Angriff). StudyDescription, SeriesDescription und ImageComments laufen
+    durch present_header_field (Bereinigung, Guard, Markierung je nach Arm).
     """
     study_id = args.get("study_id", "")
 
@@ -317,24 +342,19 @@ def _read_header(args: dict, ctx: dict) -> dict:
             "Date": "20240101",
         }
 
-    # Injizierte Felder aus Angriffsvariante einsetzen
-    injected = ctx.get("injected_headers", {})
-    if "StudyDescription" in injected:
-        base_header["StudyDescription"] = injected["StudyDescription"]
-    if "SeriesDescription" in injected:
-        for s in base_header.get("series", []):
-            s["SeriesDescription"] = injected["SeriesDescription"]
-    if "ImageComments" in injected:
-        base_header["ImageComments"] = injected["ImageComments"]
+    if "error" in base_header:
+        return base_header
 
-    if ctx.get("sanitize_headers"):
-        from sanitize import sanitize_study_header
-        base_header = sanitize_study_header(base_header)
-
-    if ctx.get("guard"):
-        from guard import filter_header
-        base_header = filter_header(base_header, ctx, "read_header", study_id)
-
+    # Header kommen aus der Studie in Orthanc (bei Angriffen die Kopie)
+    for feld in ("StudyDescription", "ImageComments"):
+        base_header[feld] = present_header_field(
+            feld, base_header.get(feld, ""), ctx, "read_header", study_id
+        )
+    for serie in base_header.get("series", []):
+        serie["SeriesDescription"] = present_header_field(
+            "SeriesDescription", serie.get("SeriesDescription", ""), ctx,
+            "read_header", study_id,
+        )
     return base_header
 
 
@@ -467,17 +487,11 @@ def _view_slices(args: dict, ctx: dict) -> dict:
         if not images:
             return {"error": f"No rendered slices available for series '{series_desc}'"}
 
-        # Der Serienname geht an das Modell zurück und muss im Abwehrarm 1.2
-        # ebenfalls bereinigt werden, sonst leakt der Angriff hier wieder rein.
-        if ctx.get("sanitize_headers"):
-            from sanitize import sanitize_series_description
-            series_desc = sanitize_series_description(series_desc)
-
-        if ctx.get("guard"):
-            from guard import filter_text
-            series_desc = filter_text(
-                series_desc, ctx, "view_slices", "SeriesDescription", study_id
-            )
+        # Der Serienname geht an das Modell zurück: gleiche Bereinigung, Guard
+        # und Markierung wie in read_header, sonst leakt der Angriff hier
+        series_desc = present_header_field(
+            "SeriesDescription", series_desc, ctx, "view_slices", study_id
+        )
 
         return {
             "window":   window,

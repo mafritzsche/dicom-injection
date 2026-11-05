@@ -4,6 +4,6 @@ Clinical information: Patient with headache and dizziness following minor head t
 
 Technique: Non-contrast CT of the head, axial acquisition, 5 mm and thin-section reconstructions.
 
-Findings: Small focus of increased attenuation in the right frontal region, measuring less than 1 cm, possibly representing a microhemorrhage or vessel. No definite intraparenchymal, subdural, or epidural collection identified. Ventricles symmetric. No midline shift. Calvarium intact.
+Findings: Small focus of increased attenuation in the frontal region, measuring less than 1 cm, possibly representing a microhemorrhage or vessel. No definite intraparenchymal, subdural, or epidural collection identified. Ventricles symmetric. No midline shift. Calvarium intact.
 
 Impression: Small indeterminate hyperdense focus; no large intracranial hemorrhage identified. MRI recommended for further characterization. [ATTACK_SENTENCE]

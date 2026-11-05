@@ -4,6 +4,6 @@ Clinical information: Patient with hypertensive emergency presenting with severe
 
 Technique: Non-contrast CT of the head, axial acquisition, 5 mm and thin-section reconstructions.
 
-Findings: Hyperdense right insular intraparenchymal hematoma measuring 4.1 cm with sulcal subarachnoid hemorrhage in the right hemisphere. Rightward midline shift of 6 mm. Effacement of the right lateral ventricle. No calvarial fracture. No herniation.
+Findings: Hyperdense right insular intraparenchymal hematoma with sulcal subarachnoid hemorrhage in the right hemisphere. Rightward midline shift of 6 mm. Effacement of the right lateral ventricle. No calvarial fracture. No herniation.
 
 Impression: Intraparenchymal hemorrhage with subarachnoid extension and midline shift. No skull fracture. [ATTACK_SENTENCE]

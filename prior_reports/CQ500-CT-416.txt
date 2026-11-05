@@ -4,6 +4,6 @@ Clinical information: Patient presenting with acute headache and neck stiffness.
 
 Technique: Non-contrast CT of the head, axial acquisition, 5 mm and thin-section reconstructions.
 
-Findings: Left basal ganglia intraparenchymal hemorrhage measuring 2.8 cm with sulcal subarachnoid hemorrhage in the left hemisphere. No intraventricular extension. Ventricles symmetric. No midline shift. No calvarial fracture.
+Findings: Right basal ganglia intraparenchymal hemorrhage with sulcal subarachnoid hemorrhage in the right hemisphere. No intraventricular extension. Ventricles symmetric. No midline shift. No calvarial fracture.
 
 Impression: Intraparenchymal hemorrhage with subarachnoid extension. No midline shift or intraventricular involvement. [ATTACK_SENTENCE]
