@@ -209,7 +209,7 @@ davor und danach unterscheiden sich über `system_prompt_sha256`.
 
 Tests: `tests/test_befund_offline.py`.
 
-## Token-Limit pro Antwort: 4096
+## Token-Limit pro Antwort: 4096, seit 2026-11-06 24576
 
 Seit 2026-11-04 begrenzt der Harness jede Modell-Antwort auf
 `MAX_TOKENS = 4096` (`config.py`). Vorher stand `max_tokens=1024` fest in
@@ -238,6 +238,65 @@ Studienläufen reicht, zeigt `log["finish_reasons"]`: Jede Antwort mit
 `finish_reason = length` wurde abgeschnitten.
 
 Tests: `tests/test_tool_calls_offline.py` (`test_max_tokens_aus_config`).
+
+### Nachtrag 2026-11-06: Limit auf 24576 erhöht
+
+Probelauf 05./06.11. (Arm 1.0, GLM und Nemotron, CQ500-CT-102 und
+CQ500-CT-27, je 46 Attacken bzw. Kontrollen soweit anwendbar, 3
+Wiederholungen, 372 Läufe) mit `MAX_TOKENS = 4096`: In 59 Läufen erreichte
+mindestens eine Antwort das Limit (`finish_reason = length`).
+
+- 36 Läufe brachen ab, weil die letzte Antwort abgeschnitten war
+  (GLM 22, Nemotron 14). Bei GLM hatten 19 dieser Antworten 4096 Token,
+  aber keinen sichtbaren Text: Das ganze Budget ging ins interne
+  Nachdenken, meist direkt nach `view_slices`. Bei Nemotron bestanden die
+  abgeschnittenen Antworten oft aus tausenden Leerzeilen (Wiederholungs-
+  schleife).
+- 3 weitere Abbrüche (Nemotron) hatten eine abgeschnittene Zwischenantwort.
+- 20 Läufe galten als vollständig, obwohl eine Zwischenantwort abgeschnitten
+  war (der Tool-Aufruf stand vor der Schnittstelle).
+
+Das Limit von 4096 hat damit in den offenen Modellen den Ablauf
+mitbestimmt. Neuer Wert: `MAX_TOKENS = 24576` für alle Modelle. Der Gateway
+meldet als Obergrenze 131072 Ausgabe-Token (GLM) bzw. 128000 Token Kontext
+(Nemotron).
+
+Umgang mit den Probelauf-Logs: Das Limit verändert eine Antwort nur, wenn
+sie es erreicht. Die 313 Läufe, in denen keine Antwort das Limit von 4096
+erreichte, wären mit 24576 identisch verlaufen und bleiben gültig (im Log
+steht `max_tokens: 4096`). Die 59 Läufe mit mindestens einer abgeschnittenen
+Antwort liegen in `logs/pilot-2026-11-05-max4096/` (ebenso auf U:), mit der
+Liste `wiederholen.csv`. Da sie nicht mehr in `logs/` liegen, führt der
+nächste Start mit denselben Parametern genau diese 59 Läufe neu aus
+(Dry-Run: 372 geplant, 59 offen).
+
+Die übrigen 18 unvollständigen Läufe des Probelaufs (17 Abbrüche ohne
+Befund, 1 ohne Priorität) haben keinen Bezug zum Limit; alle endeten mit
+`stop`, ohne erkannten Tool-Block:
+
+- **Formatfehler, 11 Läufe:** GLM schließt den ` ```tool `-Block nicht (3),
+  Nemotron schreibt ` ```json `, lässt den öffnenden Block weg oder nutzt
+  `"tool":` statt `"name":` (8). Entscheidung 2026-11-06: Das ist
+  Modellverhalten. Der Parser wird nicht toleranter gemacht, damit für alle
+  Modelle derselbe Maßstab gilt; die Läufe bleiben als „Abbruch ohne Befund“
+  in den Daten, und Formatfehler sind eine Beobachtung für die Auswertung.
+  Der volle Antworttext steht im Log, die Einteilung ist nachvollziehbar.
+- **Auffällig kurzer Text, 7 Läufe (GLM):** nur eine Ankündigung („Let me
+  start by …“), aber deutlich mehr erzeugte Token als sichtbarer Text
+  (z. B. 1279 Token für 384 Zeichen). Verdacht war, dass Gateway oder vLLM
+  Teile der Antwort in native Tool-Calls verschiebt. Nachtest 2026-11-06:
+  Die erste Anfrage der 6 Fälle, die in der ersten Antwort abbrachen,
+  erneut an GLM geschickt (je einmal, Rohantwort vollständig gespeichert).
+  Keine nativen Tool-Calls; jede Antwort enthielt einen ` ```tool `-Block
+  und ein Feld `reasoning_content` (internes Nachdenken). Die Differenz
+  zwischen Token und sichtbarem Text ist damit das Nachdenken, das bisher
+  nicht protokolliert wurde. Entscheidung: Modellverhalten (GLM kündigt den
+  Tool-Aufruf an, schreibt ihn aber nicht), die Läufe bleiben wie die
+  Formatfehler in den Daten. Einschränkung: Die Original-Logs enthalten das
+  Nachdenken nicht; der Befund stützt sich auf den Nachtest. Der 7. Fall
+  (A21, leere letzte Antwort nach `write_report`) wurde nicht nachgetestet,
+  da er die Bilder bräuchte. Seit 2026-11-06 protokolliert der Harness die
+  Rohantwort (siehe „Rohantwort im Lauf-Protokoll“).
 
 ## Nur vollständige Läufe werden bewertet
 
@@ -891,3 +950,25 @@ auf U: erhalten; keine Versionsgeschichte, da `results.csv` und
 Durchlauf schreibt eine Zeile (ok/FEHLER) nach `logs/backup.log`. Nach einer
 Passwortänderung muss `~/.smbcredentials` angepasst werden, sonst schlägt das
 Backup fehl.
+
+## Rohantwort im Lauf-Protokoll
+
+Seit 2026-11-06 speichert der Harness pro API-Antwort alle Felder der
+Nachricht außer `content` in `log["response_extras"]` (leere Felder
+weggelassen), z. B. `reasoning_content`/`reasoning` (internes Nachdenken,
+je nach Anbieter) und `tool_calls` (native Tool-Calls).
+`log["finish_reasons"][i]["native_tool_calls"]` zählt die nativen
+Tool-Calls je Antwort.
+
+Anlass: Im Probelauf vom 05./06.11. lieferten 7 GLM-Antworten nur eine
+kurze Ankündigung, obwohl deutlich mehr Token erzeugt wurden, und 19
+GLM-Antworten mit 4096 Token hatten gar keinen sichtbaren Text. Mit den
+bisherigen Logs (nur `content`) war nicht zu klären, wohin der Rest ging.
+
+Natives Tool Calling ist laut Protokoll ausgeschlossen. Der Harness schickt
+keine `tools`-Definition und wertet ausschließlich `content` aus; daran
+ändert sich nichts. `native_tool_calls > 0` belegt aber, dass der Server
+einen Tool-Aufruf aus dem Text herausgenommen hat – ein solcher Lauf ist
+nicht als Modellverhalten zu werten.
+
+Tests: `tests/test_rohantwort_offline.py`.

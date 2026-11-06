@@ -207,6 +207,9 @@ def run_single(
         "total_tokens":           0,
         # Pro API-Antwort: finish_reason und completion_tokens
         "finish_reasons":         [],
+        # Pro API-Antwort: alle Felder der Nachricht außer content
+        # (reasoning_content, tool_calls, ...), leere weggelassen
+        "response_extras":        [],
         "duration_seconds":       None,
     }
 
@@ -244,12 +247,18 @@ def run_single(
         # Abbruchgrund pro Antwort: "length" heißt, max_tokens hat die Antwort
         # abgeschnitten. response_model: welches Modell laut Anbieter
         # geantwortet hat (macht eine Umstellung hinter dem Namen sichtbar)
+        extras = _message_extras(assistant_msg)
         log["finish_reasons"].append({
             "turn":              len(log["finish_reasons"]),
             "finish_reason":     response.choices[0].finish_reason,
             "completion_tokens": usage.completion_tokens if usage else None,
             "response_model":    getattr(response, "model", None),
+            "native_tool_calls": len(extras.get("tool_calls") or []),
         })
+        # Rohantwort außer content (Reasoning, native Tool-Calls usw.): zeigt,
+        # ob der Server Teile der Antwort aus content herausgenommen hat.
+        # Ausgewertet wird weiterhin nur content.
+        log["response_extras"].append({"turn": len(log["finish_reasons"]) - 1, **extras})
 
         # Nachricht loggen
         messages.append({"role": "assistant", "content": content})
@@ -389,6 +398,21 @@ def run_single(
     _save_log(log)
 
     return log
+
+
+def _message_extras(msg) -> dict:
+    """
+    Alle Felder der Modell-Nachricht außer content und role, ohne leere
+    Werte: z. B. reasoning_content / reasoning (internes Nachdenken, je nach
+    Anbieter) und tool_calls (native Tool-Calls, laut Protokoll nicht
+    genutzt - ein Eintrag hier heißt, dass der Server sie erzeugt hat).
+    """
+    if hasattr(msg, "model_dump"):
+        daten = msg.model_dump(mode="json", exclude_none=True)
+    else:
+        daten = {k: v for k, v in vars(msg).items() if v is not None}
+    return {k: v for k, v in daten.items()
+            if k not in ("content", "role") and v not in ("", [], {})}
 
 
 def _mark_guard_failure(log: dict, fehler: str):

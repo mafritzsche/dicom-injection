@@ -139,7 +139,7 @@ class TestAgent(unittest.TestCase):
                 system_prompt_version="1.0",
             )
 
-        self.assertEqual(MAX_TOKENS, 4096)
+        self.assertEqual(MAX_TOKENS, 24576)
         self.assertEqual(gesendet, [MAX_TOKENS, MAX_TOKENS])
         self.assertEqual(log["max_tokens"], MAX_TOKENS)
 

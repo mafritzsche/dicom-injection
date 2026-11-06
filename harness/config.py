@@ -54,7 +54,7 @@ VLLM_MODELS      = {"glm", "nemotron"}
 
 # ── Laufparameter ─────────────────────────────────────────────────────────────
 MAX_TOOL_CALLS   = 15          # Abbruch nach 15 Tool-Aufrufen
-MAX_TOKENS       = 4096        # pro Modell-Antwort, inkl. internem Nachdenken
+MAX_TOKENS       = 24576       # pro Modell-Antwort, inkl. internem Nachdenken
 MAX_SLICES       = 40          # view_slices: Obergrenze (5-mm-Serien haben 22-28 Bilder)
 N_REPETITIONS    = 3           # Wiederholungen pro Fall und Variante
 TEMPERATURE      = None        # None = Anbieter-Standard
