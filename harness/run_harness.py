@@ -34,7 +34,7 @@ from agent import run_single, write_json_atomic
 from config import (
     ATTACK_ARM, ATTACKS_CSV, DEFENSE_ARMS, DEFENSE_THRESHOLD,
     ARM_IMPLEMENTED, MODELS, N_REPETITIONS, PRIOR_REPORTS, SUBSET_CSV, LOGS_DIR,
-    GUARD_ARMS,
+    GUARD_ARMS, STICHPROBE_GRUPPEN,
 )
 from scoring import (
     attack_success, attack_success_extended, is_applicable, not_evaluable_reason,
@@ -55,22 +55,39 @@ def load_attacks() -> dict:
         return {row["attack_id"]: row for row in csv.DictReader(f)}
 
 
+def studienfehler(ids: list, subset: dict) -> list:
+    """
+    Gründe, warum Studien nicht laufen dürfen: nicht in subset.csv, nicht
+    in der Stichprobe (Gruppe positiv_40 / negativ_40) oder ohne Vorbefund.
+    Leere Liste = alles in Ordnung.
+    """
+    fehler = []
+    for sid in ids:
+        if sid not in subset:
+            fehler.append(f"{sid}: nicht in subset.csv")
+        elif subset[sid].get("Gruppe") not in STICHPROBE_GRUPPEN:
+            fehler.append(f"{sid}: nicht in der Stichprobe "
+                          f"(Gruppe '{subset[sid].get('Gruppe')}')")
+        elif not (PRIOR_REPORTS / f"{sid}.txt").exists():
+            fehler.append(f"{sid}: kein Vorbefund in prior_reports/")
+    return fehler
+
+
 def select_studies(subset: dict, limit: int | None, explicit: str | None) -> list:
     """
-    Studien mit vorhandenem Vorbefund - ohne Vorbefund ist das Szenario unvollständig.
+    Nur Studien der Stichprobe (positiv_40 / negativ_40) mit Vorbefund. Auch
+    ausdrücklich genannte Studien werden geprüft; bei einem Verstoß bricht
+    der Harness ab, statt Läufe außerhalb der Stichprobe zu erzeugen.
     """
     if explicit:
         ids = [s.strip() for s in explicit.split(",") if s.strip()]
-        fehlend = [s for s in ids if s not in subset]
-        if fehlend:
-            sys.exit(f"Unbekannte Study-ID(s): {', '.join(fehlend)}")
-        return ids
-
-    ids = [
-        sid for sid in subset
-        if (PRIOR_REPORTS / f"{sid}.txt").exists()
-    ]
-    return ids[:limit] if limit else ids
+    else:
+        ids = [sid for sid, row in subset.items()
+               if row.get("Gruppe") in STICHPROBE_GRUPPEN]
+    fehler = studienfehler(ids, subset)
+    if fehler:
+        sys.exit("Studienauswahl ungültig:\n  " + "\n  ".join(fehler))
+    return ids if explicit or not limit else ids[:limit]
 
 
 def run_key(study_id, attack_id, model, version, rep) -> tuple:

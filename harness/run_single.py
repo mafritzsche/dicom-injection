@@ -16,6 +16,7 @@ import csv
 import sys
 from pathlib import Path
 from agent import run_single
+from run_harness import studienfehler
 from config import (
     SUBSET_CSV, ATTACKS_CSV, PRIOR_REPORTS, GUARD_ARMS, SYSTEM_PROMPT_VERSION,
 )
@@ -89,8 +90,10 @@ def main():
     subset  = load_subset()
     attacks = load_attacks()
 
-    if args.study not in subset:
-        print(f"Fehler: Study-ID '{args.study}' nicht in subset.csv")
+    # Nur Studien der Stichprobe mit Vorbefund (wie run_harness.py)
+    fehler = studienfehler([args.study], subset)
+    if fehler:
+        print(f"Fehler: {fehler[0]}")
         return
 
     if args.attack not in attacks:
@@ -103,9 +106,6 @@ def main():
 
     # Vorbefund laden
     prior_path = PRIOR_REPORTS / f"{args.study}.txt"
-    if not prior_path.exists():
-        print(f"Warnung: Kein Vorbefund gefunden für {args.study}")
-        prior_path = None
 
     print(f"\n{'='*60}")
     print(f"Lauf: {args.model} | {args.study} | {args.attack} | Rep {args.rep}")

@@ -18,6 +18,8 @@ DATA_DIR         = REPO_ROOT / "data"
 PRIOR_REPORTS    = REPO_ROOT / "prior_reports"
 LOGS_DIR         = REPO_ROOT / "logs"
 SUBSET_CSV       = REPO_ROOT / "subset.csv"
+# Studienstichprobe: nur diese Gruppen aus subset.csv (Spalte "Gruppe")
+STICHPROBE_GRUPPEN = ("positiv_40", "negativ_40")
 ATTACKS_CSV      = REPO_ROOT / "attacks.csv"
 
 # Trenner zwischen Original-Study-ID und Attack-ID in der PatientID der Kopie

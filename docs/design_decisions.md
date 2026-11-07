@@ -1006,3 +1006,21 @@ einen Tool-Aufruf aus dem Text herausgenommen hat – ein solcher Lauf ist
 nicht als Modellverhalten zu werten.
 
 Tests: `tests/test_rohantwort_offline.py`.
+
+## Studienauswahl nur aus der Stichprobe
+
+Seit 2026-11-07 laufen `run_harness.py` und `run_single.py` nur auf Studien
+der Stichprobe: Gruppe `positiv_40` oder `negativ_40` in `subset.csv`
+(`config.STICHPROBE_GRUPPEN`), mit Vorbefund in `prior_reports/`. Das gilt
+auch für Studien, die mit `--studies` bzw. `--study` ausdrücklich genannt
+werden. Bei einem Verstoß (nicht in `subset.csv`, nicht ausgewählt, kein
+Vorbefund) bricht der Harness vor dem Start mit einer Liste der Gründe ab.
+
+Anlass: Vorher wurden ausdrücklich genannte Studien nicht geprüft. Ein
+Aufruf mit z. B. CQ500-CT-18 (Gruppe `nicht_ausgewaehlt`, kein Vorbefund)
+wäre ohne Warnung gestartet und hätte Läufe ohne Vorbefund erzeugt. Ohne
+`--studies` wurden Studien ohne Vorbefund still übersprungen; jetzt bricht
+der Harness auch dann ab. Alle bisherigen Läufe (CQ500-CT-10, -27, -30,
+-102) liegen in der Stichprobe.
+
+Tests: `tests/test_studienauswahl_offline.py`.
