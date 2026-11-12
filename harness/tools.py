@@ -642,7 +642,8 @@ def parse_tool_calls(text: str) -> list:
         ```tool
         {"name": "...", "arguments": {...}}
         ```
-    Blöcke mit ungültigem JSON werden übersprungen. Leere Liste, wenn kein
+    Blöcke mit ungültigem JSON oder mit JSON, das kein Objekt ist (z. B. eine
+    Liste mehrerer Aufrufe), werden übersprungen. Leere Liste, wenn kein
     Tool-Aufruf gefunden.
     """
     import re
@@ -650,7 +651,9 @@ def parse_tool_calls(text: str) -> list:
     calls = []
     for match in re.finditer(pattern, text, re.DOTALL):
         try:
-            calls.append(json.loads(match.group(1).strip()))
+            call = json.loads(match.group(1).strip())
         except json.JSONDecodeError:
             continue
+        if isinstance(call, dict):
+            calls.append(call)
     return calls

@@ -1308,3 +1308,34 @@ ungültig.
 | ohne Priorität | 3 | 0 |
 | Angriffserfolg (Hauptrate) | 86/1243 (6,9 %) | 64/1143 (5,6 %) |
 | erweiterte Rate | 86/1267 (6,8 %) | 64/1221 (5,2 %) |
+
+## Parser: nur JSON-Objekte zählen als Tool-Aufruf (2026-11-12)
+
+Der Lauf über CQ500-CT-210/CQ500-CT-222 (Start 2026-11-11 18:44) brach
+nach 14 Minuten bei Lauf 16/372 (GLM, CQ500-CT-210, A08, Wdh. 0) mit
+`AttributeError: 'list' object has no attribute 'get'` in `agent.py` ab;
+der ganze Prozess endete. Ursache: GLM schrieb in einen ` ```tool `-Block
+gültiges JSON, das aber kein Objekt war, sondern eine Liste (vermutlich
+mehrere Aufrufe als `[{…}, {…}]`). `parse_tool_calls` prüfte nur, ob das
+JSON gültig ist, und gab die Liste als Aufruf weiter. Die auslösende
+Antwort ist nicht erhalten, da das Log erst am Laufende geschrieben wird.
+
+Änderung: `parse_tool_calls` übernimmt nur JSON-Objekte. Ein Block mit
+einer Liste, einem String oder einer Zahl wird übersprungen wie ein Block
+mit ungültigem JSON. Der Parser wird dadurch nicht toleranter: Ein solcher
+Block wird nicht ausgeführt, der Lauf geht mit dem nächsten gültigen
+Aufruf weiter oder endet als „Abbruch ohne Befund“ – derselbe Maßstab wie
+bei den übrigen Formatfehlern (siehe Token-Limit-Abschnitt).
+
+Bisherige Läufe sind nicht betroffen: In allen Logs (einschließlich
+`logs/pilot-2026-11-05-max4096/`) enthielt keiner der 233.401 gültigen
+JSON-Blöcke in ` ```tool ` etwas anderes als ein Objekt – jeder solche Fall
+hätte den Prozess ebenfalls abstürzen lassen. Für alle protokollierten
+Läufe ergibt der neue Parser daher dasselbe Ergebnis.
+
+Der Lauf CQ500-CT-210, A08, Wdh. 0 wurde nie protokolliert und läuft beim
+Neustart per Resume vollständig neu; die übrigen 15 Läufe bleiben gültig.
+
+Tests: `tests/test_tool_calls_offline.py` (Liste, String und Zahl im
+Block; Liste als zweiter und als einziger Block im Lauf). Mit dem alten
+Parser schlagen beide Tests mit genau dem Absturz fehl; Suite 130 OK.

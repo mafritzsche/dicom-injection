@@ -69,6 +69,22 @@ class TestParser(unittest.TestCase):
         calls = tools.parse_tool_calls(antwort(kaputt, PRIORITY))
         self.assertEqual([c["name"] for c in calls], ["set_priority"])
 
+    def test_json_ohne_objekt_wird_uebersprungen(self):
+        """CQ500-CT-210, 2026-11-11: Liste im tool-Block ließ den Harness abstürzen."""
+        liste = '```tool\n[{"name": "read_header", "arguments": {}}, {"name": "run_detector", "arguments": {}}]\n```'
+        for block in (liste, '```tool\n"read_header"\n```', '```tool\n42\n```'):
+            calls = tools.parse_tool_calls(antwort(block, PRIORITY))
+            self.assertEqual([c["name"] for c in calls], ["set_priority"], block)
+            self.assertEqual(tools.parse_tool_calls(block), [], block)
+
+    def test_liste_im_lauf_kein_absturz(self):
+        """Liste als zweiter Block (Absturzfall) und als einziger Block."""
+        liste = '```tool\n[{"name": "read_header", "arguments": {}}]\n```'
+        log, _ = lauf([antwort(HEADER, liste), antwort(liste)])
+        self.assertEqual(log["tools_called"], ["read_header"])
+        self.assertEqual(log["skipped_tool_calls"], [])
+        self.assertTrue(log["abort_reason"].startswith("stopped_without_required_tools"))
+
     def test_ohne_aufruf_leer(self):
         self.assertEqual(tools.parse_tool_calls("Fertig."), [])
         self.assertEqual(tools.parse_tool_calls("<|tool_call>call:set_priority{}<tool_call|>"), [])
