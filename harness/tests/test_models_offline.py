@@ -35,8 +35,9 @@ class TestFestgelegteModelle(unittest.TestCase):
             "google":    "google/gemini-4-argon-20261013",
             "glm":       "glm-5.3-flash",
             "nemotron":  "nemotron-3.5-super-vl",
+            "gemma":     "gemma-4-31b",
         })
-        self.assertEqual(config.VLLM_MODELS, {"glm", "nemotron"})
+        self.assertEqual(config.VLLM_MODELS, {"glm", "nemotron", "gemma"})
 
     def test_openrouter_datierte_kennung(self):
         for name, kennung in config.MODELS.items():

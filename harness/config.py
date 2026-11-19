@@ -47,12 +47,13 @@ MODELS = {
     # Open-weight über das interne LiteLLM-Gateway (vLLM-Server dahinter)
     "glm":        "glm-5.3-flash",
     "nemotron":   "nemotron-3.5-super-vl",
+    "gemma":      "gemma-4-31b",            # Pilot ab 2026-11-19
 }
 
 # Internes Gateway für die Open-Weight-Modelle (OpenAI-kompatibel)
 VLLM_BASE_URL    = os.getenv("VLLM_BASE_URL", "http://10.32.16.43:4000/v1")
 VLLM_API_KEY     = os.getenv("LITELLM_API_KEY", "")
-VLLM_MODELS      = {"glm", "nemotron"}
+VLLM_MODELS      = {"glm", "nemotron", "gemma"}
 
 # ── Laufparameter ─────────────────────────────────────────────────────────────
 MAX_TOOL_CALLS   = 15          # Abbruch nach 15 Tool-Aufrufen
