@@ -31,13 +31,14 @@ import run_harness
 
 KONTROLLE = {"attack_id": "C06", "placement": "keine", "target": "control",
              "short_text": "", "long_text": "", "applies_to": "both"}
-ARGS = SimpleNamespace(no_resume=False, verbose=False, allow_prompt_only_arms=False)
+ARGS = SimpleNamespace(no_resume=False, verbose=False, allow_prompt_only_arms=False,
+                       budget_usd=300.0)
 
 
 def plan() -> list:
     """3 Studien x 2 Wiederholungen = 6 Läufe."""
     return [
-        {"arm": "1.0", "model": "anthropic", "study_id": sid, "attack_id": "C06",
+        {"arm": "1.0", "model": "sonnet", "study_id": sid, "attack_id": "C06",
          "rep": rep, "ground_truth": False, "attack": KONTROLLE}
         for sid in ("CQ500-CT-1", "CQ500-CT-2", "CQ500-CT-3")
         for rep in range(2)
@@ -45,7 +46,7 @@ def plan() -> list:
 
 
 def schluessel(study_id, rep):
-    return run_harness.run_key(study_id, "C06", "anthropic", "1.0", rep)
+    return run_harness.run_key(study_id, "C06", "sonnet", "1.0", rep)
 
 
 class FakeRunSingle:
@@ -80,6 +81,7 @@ class FakeRunSingle:
             "started_at": FakeRunSingle.zeit.isoformat(), "invalid": False,
             "abort_reason": None, "tool_calls": [], "tools_called": [],
         }
+        log["cost_usd"] = 1.5
         if key in self.api_fehler:
             self.api_fehler.discard(key)
             log["abort_reason"] = "API error: Timeout"
@@ -93,7 +95,9 @@ class TestResume(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.logs = Path(self.tmp.name)
         self.patches = [mock.patch.object(agent, "LOGS_DIR", self.logs),
-                        mock.patch.object(run_harness, "LOGS_DIR", self.logs)]
+                        mock.patch.object(run_harness, "LOGS_DIR", self.logs),
+                        mock.patch.object(run_harness, "KOSTEN_LEDGER",
+                                          self.logs / "kosten.jsonl")]
         for p in self.patches:
             p.start()
 
@@ -159,9 +163,36 @@ class TestResume(unittest.TestCase):
         self.ausfuehren(dritter)
         self.assertEqual(sum(dritter.aufrufe.values()), 0)
 
+    def test_kosten_werden_gebucht(self):
+        self.ausfuehren(FakeRunSingle())
+        self.assertAlmostEqual(run_harness.kosten_bisher(), 6 * 1.5)
+
+    def test_budget_stoppt_neue_laeufe(self):
+        """Nach Erreichen des Budgets startet kein neuer Lauf; Resume setzt später fort."""
+        fake = FakeRunSingle()
+        budget = SimpleNamespace(**{**vars(ARGS), "budget_usd": 3.0})
+        with mock.patch.object(run_harness, "run_single", fake):
+            records = run_harness.execute(plan(), budget, run_harness.existing_runs())
+        self.assertEqual(fake.n, 2)             # 2 x 1,5 USD = Budget erreicht
+        self.assertEqual(len(records), 2)
+        fake2 = FakeRunSingle()
+        records = self.ausfuehren(fake2)        # Budget 300: Rest läuft
+        self.assertEqual(fake2.n, 4)
+        self.assertEqual(len(records), 6)
+
+    def test_gateway_ohne_budget(self):
+        """Läufe über das Gateway kosten nichts und werden nicht gebremst."""
+        fake = FakeRunSingle()
+        budget = SimpleNamespace(**{**vars(ARGS), "budget_usd": 0.0})
+        laeufe = [{**p, "model": "glm"} for p in plan()]
+        with mock.patch.object(run_harness, "run_single", fake):
+            run_harness.execute(laeufe, budget, {})
+        self.assertEqual(fake.n, 6)
+        self.assertFalse((self.logs / "kosten.jsonl").exists())
+
     def test_halbe_datei_bleibt_nicht_liegen(self):
         """Abbruch mitten im Schreiben: weder Log noch Temporärdatei bleiben."""
-        log = {"study_id": "CQ500-CT-1", "attack_id": "C06", "model": "anthropic",
+        log = {"study_id": "CQ500-CT-1", "attack_id": "C06", "model": "sonnet",
                "system_prompt_version": "1.0", "repetition": 0,
                "started_at": "2026-11-05T10:00:00+00:00"}
 

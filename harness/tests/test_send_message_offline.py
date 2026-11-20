@@ -125,7 +125,7 @@ class TestAgent(unittest.TestCase):
              mock.patch.object(agent, "_save_log"), \
              mock.patch.object(tools, "_get_orthanc_header", return_value=header):
             log = agent.run_single(
-                model_name="anthropic", study_id="CQ500-CT-10", attack_id="A07",
+                model_name="sonnet", study_id="CQ500-CT-10", attack_id="A07",
                 attack=angriff, ground_truth=True, repetition=0,
                 prior_report_path=PRIOR_REPORTS / "CQ500-CT-10.txt",
                 system_prompt_version="1.0",

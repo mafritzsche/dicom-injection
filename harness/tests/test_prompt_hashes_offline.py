@@ -50,7 +50,7 @@ class TestPromptHashes(unittest.TestCase):
              mock.patch.object(agent, "ensure_variant", return_value=None), \
              mock.patch.object(agent, "_save_log"):
             log = agent.run_single(
-                model_name="anthropic", study_id="CQ500-CT-10", attack_id="C06",
+                model_name="sonnet", study_id="CQ500-CT-10", attack_id="C06",
                 attack=kontrolle, ground_truth=True, repetition=0,
                 prior_report_path=PRIOR_REPORTS / "CQ500-CT-10.txt",
                 system_prompt_version="1.1",

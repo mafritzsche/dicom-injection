@@ -30,8 +30,8 @@ class TestFestgelegteModelle(unittest.TestCase):
 
     def test_modell_liste(self):
         self.assertEqual(config.MODELS, {
-            "anthropic": "anthropic/claude-opus-5.5-20260921",
-            "openai":    "openai/gpt-6.1-terra-pro-20261026",
+            "sonnet":    "anthropic/claude-sonnet-5.5-20260928",
+            "gpt":       "openai/gpt-6.1-sol-20260929",
             "google":    "google/gemini-4-argon-20261013",
             "glm":       "glm-5.3-flash",
             "nemotron":  "nemotron-3.5-super-vl",
@@ -48,14 +48,20 @@ class TestFestgelegteModelle(unittest.TestCase):
 
 class TestClient(unittest.TestCase):
 
-    def lauf(self, model_name):
+    def lauf(self, model_name, antworten_liste=None, usage=None, choice_extra=None):
         erstellt = []
-        antworten = FakeClient(list(ABSCHLUSS))
+        self.anfragen = []
+        antworten = FakeClient(list(antworten_liste or ABSCHLUSS))
         original = antworten.create
 
         def create(**kw):
+            self.anfragen.append(kw)
             r = original(**kw)
             r.model = "geantwortet/" + kw["model"]
+            r.usage = usage
+            if choice_extra:
+                for k, v in choice_extra.items():
+                    setattr(r.choices[0], k, v)
             return r
         antworten.create = create
 
@@ -82,9 +88,65 @@ class TestClient(unittest.TestCase):
         self.assertEqual(log["model_string"], "glm-5.3-flash")
 
     def test_openrouter(self):
-        kw, log = self.lauf("anthropic")
+        kw, log = self.lauf("sonnet")
         self.assertEqual(kw["base_url"], config.OPENROUTER_BASE_URL)
-        self.assertEqual(log["model_string"], "anthropic/claude-opus-5.5-20260921")
+        self.assertEqual(log["model_string"], "anthropic/claude-sonnet-5.5-20260928")
+
+    def test_sonnet_parameter(self):
+        """Effort high, fester Anbieter, Caching auf oberster Ebene, kein temperature/top_p."""
+        _, log = self.lauf("sonnet")
+        for anfrage in self.anfragen:
+            eb = anfrage["extra_body"]
+            self.assertEqual(eb["reasoning"], {"effort": "high"})
+            self.assertEqual(eb["provider"], {"order": ["anthropic"], "allow_fallbacks": False})
+            self.assertEqual(eb["cache_control"], {"type": "ephemeral"})
+            self.assertEqual(eb["usage"], {"include": True})
+            for verboten in ("temperature", "top_p", "top_k"):
+                self.assertNotIn(verboten, anfrage)
+                self.assertNotIn(verboten, eb)
+        self.assertEqual(log["request_params"]["reasoning"], {"effort": "high"})
+
+    def test_gpt_parameter(self):
+        """GPT: Reasoning auf Standard (kein Parameter), kein cache_control (automatisch)."""
+        self.lauf("gpt")
+        eb = self.anfragen[0]["extra_body"]
+        self.assertNotIn("reasoning", eb)
+        self.assertNotIn("cache_control", eb)
+        self.assertEqual(eb["provider"], {"order": ["openai"], "allow_fallbacks": False})
+
+    def test_nachrichten_unveraendert(self):
+        """Caching ändert den Nachrichtenverlauf nicht: kein cache_control in messages."""
+        self.lauf("sonnet")
+        import json
+        for anfrage in self.anfragen:
+            self.assertNotIn("cache_control", json.dumps(anfrage["messages"]))
+
+    def test_gateway_ohne_zusatzparameter(self):
+        self.lauf("glm")
+        self.assertNotIn("extra_body", self.anfragen[0])
+
+    def test_kosten_und_cache_im_log(self):
+        usage = SimpleNamespace(total_tokens=110, completion_tokens=10, model_dump=lambda **k: {
+            "prompt_tokens": 100, "completion_tokens": 10, "cost": 0.25,
+            "prompt_tokens_details": {"cached_tokens": 80, "cache_write_tokens": 0}})
+        _, log = self.lauf("sonnet", usage=usage)
+        self.assertEqual(len(log["finish_reasons"]), 2)
+        self.assertAlmostEqual(log["cost_usd"], 0.5)
+        self.assertEqual(log["finish_reasons"][0]["cached_tokens"], 80)
+        self.assertEqual(log["finish_reasons"][0]["cost"], 0.25)
+
+    def test_verweigerung(self):
+        from scoring import run_status, REFUSED
+        _, log = self.lauf("sonnet", choice_extra={
+            "finish_reason": "stop", "model_extra": {"native_finish_reason": "refusal"}})
+        self.assertEqual(log["abort_reason"], "refused")
+        self.assertEqual(log["refusal"]["native_finish_reason"], "refusal")
+        self.assertEqual(run_status(log), REFUSED)
+        self.assertEqual(len(self.anfragen), 1)
+
+    def test_verweigerung_content_filter(self):
+        _, log = self.lauf("gpt", choice_extra={"finish_reason": "content_filter"})
+        self.assertEqual(log["abort_reason"], "refused")
 
     def test_antwortendes_modell_im_log(self):
         _, log = self.lauf("nemotron")

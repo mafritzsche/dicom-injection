@@ -34,12 +34,13 @@ from agent import run_single, write_json_atomic
 from config import (
     ATTACK_ARM, ATTACKS_CSV, DEFENSE_ARMS, DEFENSE_THRESHOLD,
     ARM_IMPLEMENTED, MODELS, N_REPETITIONS, PRIOR_REPORTS, SUBSET_CSV, LOGS_DIR,
-    GUARD_ARMS, STICHPROBE_GRUPPEN,
+    GUARD_ARMS, STICHPROBE_GRUPPEN, VLLM_MODELS, BUDGET_USD, KOSTEN_LEDGER,
 )
 from scoring import (
     attack_success, attack_success_extended, is_applicable, not_evaluable_reason,
     run_status, external_send,
     COMPLETED, ABORTED_NO_REPORT, INCOMPLETE_NO_PRIORITY, MAX_TOOL_CALLS, INVALID,
+    REFUSED,
 )
 
 
@@ -313,6 +314,15 @@ def execute(plan: list, args, done: dict) -> list:
                 print(f"[{i}/{gesamt}] übersprungen (vorhanden): {key}")
             continue
 
+        # Budget: kein neuer OpenRouter-Lauf, wenn die bisherigen Kosten
+        # (alle Prozesse, siehe KOSTEN_LEDGER) das Budget erreicht haben
+        if p["model"] not in VLLM_MODELS:
+            ausgegeben = kosten_bisher()
+            if ausgegeben >= args.budget_usd:
+                print(f"Budget erreicht: {ausgegeben:.2f} USD von {args.budget_usd:.2f} USD. "
+                      f"Keine weiteren OpenRouter-Läufe.")
+                break
+
         prior = PRIOR_REPORTS / f"{p['study_id']}.txt"
         print(f"[{i}/{gesamt}] {p['arm']} | {p['model']} | {p['study_id']} | "
               f"{p['attack_id']} | rep {p['rep']}")
@@ -340,6 +350,8 @@ def execute(plan: list, args, done: dict) -> list:
         path = _log_path(log)
         if path:
             write_json_atomic(path, log)
+        if p["model"] not in VLLM_MODELS:
+            kosten_buchen(log, path)
 
         records.append({
             "arm": p["arm"], "prompt_version": p["arm"], "model": p["model"],
@@ -352,6 +364,38 @@ def execute(plan: list, args, done: dict) -> list:
         })
 
     return records
+
+
+def kosten_bisher() -> float:
+    """Summe der OpenRouter-Kosten (USD) aller bisher gebuchten Läufe."""
+    if not KOSTEN_LEDGER.exists():
+        return 0.0
+    summe = 0.0
+    with open(KOSTEN_LEDGER, encoding="utf-8") as f:
+        for zeile in f:
+            try:
+                summe += float(json.loads(zeile).get("cost_usd") or 0.0)
+            except (ValueError, AttributeError):
+                continue
+    return summe
+
+
+def kosten_buchen(log: dict, path):
+    """Hängt die Kosten eines Laufs an KOSTEN_LEDGER an (sicher bei parallelen Prozessen)."""
+    import fcntl
+    KOSTEN_LEDGER.parent.mkdir(parents=True, exist_ok=True)
+    eintrag = {
+        "finished_at": log.get("finished_at"), "model": log.get("model"),
+        "study_id": log.get("study_id"), "attack_id": log.get("attack_id"),
+        "arm": log.get("system_prompt_version"), "rep": log.get("repetition"),
+        "abort_reason": log.get("abort_reason"), "cost_usd": log.get("cost_usd") or 0.0,
+        "log_path": str(path) if path else None,
+    }
+    with open(KOSTEN_LEDGER, "a", encoding="utf-8") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        f.write(json.dumps(eintrag, ensure_ascii=False) + "\n")
+        f.flush()
+        fcntl.flock(f, fcntl.LOCK_UN)
 
 
 def _bewertung(log: dict | None, attack: dict, ground_truth: bool) -> dict:
@@ -402,7 +446,8 @@ def write_results(records: list):
     return path
 
 
-LAUFSTATUS = [COMPLETED, ABORTED_NO_REPORT, INCOMPLETE_NO_PRIORITY, MAX_TOOL_CALLS, INVALID]
+LAUFSTATUS = [COMPLETED, ABORTED_NO_REPORT, INCOMPLETE_NO_PRIORITY, MAX_TOOL_CALLS, REFUSED,
+              INVALID]
 
 
 def summary(records: list) -> dict:
@@ -514,6 +559,8 @@ def main():
     ap.add_argument("--threshold", type=float, default=DEFENSE_THRESHOLD)
     ap.add_argument("--threshold-group", choices=["model", "global"], default="model",
                     help="Schwelle je Modell+Attacke oder über alle Modelle")
+    ap.add_argument("--budget-usd", type=float, default=BUDGET_USD,
+                    help="OpenRouter-Kosten, ab denen keine neuen Läufe starten")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--no-resume", action="store_true",
                     help="auch bereits protokollierte Läufe erneut ausführen")

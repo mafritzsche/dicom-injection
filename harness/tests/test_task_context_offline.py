@@ -96,7 +96,7 @@ def lauf(arm, antworten, scan=None, **header):
          mock.patch.object(tools.requests, "get", side_effect=orthanc(**header)), \
          mock.patch.object(guard, "scan", scan):
         return agent.run_single(
-            model_name="anthropic", study_id=STUDIE, attack_id="C06", attack=KONTROLLE,
+            model_name="sonnet", study_id=STUDIE, attack_id="C06", attack=KONTROLLE,
             ground_truth=True, repetition=0,
             prior_report_path=PRIOR_REPORTS / f"{STUDIE}.txt", system_prompt_version=arm,
         )

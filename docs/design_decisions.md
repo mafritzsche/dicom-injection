@@ -2166,3 +2166,110 @@ Auswahl nach dem Angriffsarm über 80 Studien (Dry-Run, `--phase defense
 |---|---|---|
 | GLM | A06, A10, A14, A20, A22, A30, A36, A38 (8) | 9600 |
 | Nemotron | A01, A02, A04, A10, A12, A19, A20, A27, A28, A29, A33, A35, A36 (13) | 12000 |
+
+### OpenRouter-Modelle: Wechsel auf GPT-6.1 Sol und Sonnet 5.5, eine Wiederholung, Budget (2026-11-20)
+
+Für die API-Kosten von GPT und Claude gilt ein festes Budget von etwa
+300 €. Opus 5.5 und GPT-6.1 Terra Pro (festgelegt am 2026-11-05) hätten
+mit drei Wiederholungen schätzungsweise 1300–1900 $ gekostet.
+
+**Modelle.** Für den Vergleich der Anbieter sollen beide Modelle aus
+derselben Klasse kommen. Die Spitzenmodelle (Fable 5.2, GPT-6 Astra) sind
+zu teuer; eine Klasse darunter kosten Claude Sonnet 5.5 und GPT-6.1 Sol
+pro Token gleich viel (2 $ / 10 $ je 1 Mio. Token Ein-/Ausgabe, Cache-Lesen
+0,10 $). Neue Einträge in `config.MODELS`, datierte Kennungen:
+
+| Name | Kennung | veröffentlicht |
+|---|---|---|
+| `sonnet` | `anthropic/claude-sonnet-5.5-20260928` | 28.09.2026 |
+| `gpt` | `openai/gpt-6.1-sol-20260929` | 29.09.2026 |
+
+Sie ersetzen `anthropic` (Opus 5.5) und `openai` (GPT-6.1 Terra Pro);
+mit diesen beiden gab es nur Pilotläufe. Seit 17.11. gibt es GPT-6.2 Sol
+zum selben Preis; verwendet wird wie beschlossen GPT-6.1 Sol, zeitlich
+passend zu Sonnet 5.5.
+
+**Anfrage-Parameter** (`config.OPENROUTER_PARAMS`, im Log unter
+`request_params`):
+- Kein `temperature`, `top_p` oder `top_k` (Sonnet 5.5 lehnt Abweichungen
+  vom Standard ab; der Harness setzte sie nie).
+- Sonnet: `reasoning.effort = "high"` ausdrücklich (laut OpenRouter auch
+  der Standard des Modells).
+- GPT: kein Reasoning-Parameter, also Standard des Anbieters (laut
+  OpenRouter `medium`).
+- Anbieter fest, ohne Ausweichen (`provider.order` = `anthropic` bzw.
+  `openai`, `allow_fallbacks: false`).
+
+**Prompt-Caching.** Der Harness schickt in jedem Schritt den ganzen
+Verlauf samt Bildern erneut. Sonnet: eine Markierung `cache_control` auf
+oberster Ebene der Anfrage; der Nachrichtenverlauf bleibt unverändert
+(Test `test_nachrichten_unveraendert`). GPT cacht automatisch. Das Modell
+sieht dasselbe wie ohne Caching; es ändert sich nur die Abrechnung
+(Cache-Lesen 1/20 des Eingabepreises). Pro Antwort stehen `prompt_tokens`,
+`cached_tokens`, `cache_write_tokens`, `reasoning_tokens` und `cost` in
+`finish_reasons`, die Summe je Lauf in `cost_usd`.
+
+**Eine Wiederholung.** GPT und Claude laufen mit einer Wiederholung
+(`--reps 1`) statt drei, dafür auf allen 80 Studien: Eine weitere Studie
+bringt mehr als eine weitere Wiederholung derselben Studie. 62 Läufe pro
+Paar, 2480 pro Modell. GLM, Nemotron (und Gemma) bleiben bei drei
+Wiederholungen. Für die Abwehrarme dieser Modelle gilt die Schwelle damit
+auf Basis einer Wiederholung.
+
+**Verweigerung als eigene Laufkategorie.** `run_status = refused`, wenn
+der Anbieter `refusal`/`content_filter` als Abbruchgrund meldet oder die
+Antwort ein `refusal`-Feld hat (`log["refusal"]`). Gezählt wie die
+Abbrüche: nicht in der Hauptrate, in der erweiterten Rate, wenn das Ziel
+bestimmbar ist.
+
+**Budget.** Jeder OpenRouter-Lauf wird in `logs/kosten_openrouter.jsonl`
+gebucht (Kosten laut OpenRouter, USD). `run_harness` startet keinen neuen
+OpenRouter-Lauf mehr, sobald die Summe `BUDGET_USD = 300` erreicht
+(`--budget-usd`); 300 $ liegen unter 300 €. Gateway-Läufe sind nicht
+betroffen. Nicht gebucht: Probeaufrufe am 20.11. für zusammen etwa 0,10 $.
+
+**Zufällige Paarreihenfolge** (`harness/run_pairs.py`). Paare wie bisher
+(i-te Studie aus `positiv_40` mit i-ter aus `negativ_40`), Reihenfolge
+zufällig mit Seed 20261120, festgehalten in
+`logs/paar_reihenfolge_20261120.json`. Pro Paar laufen alle Modelle
+gleichzeitig, zwei Paare parallel. Reicht das Geld nicht, ist die gelaufene
+Auswahl trotzdem ausgewogen. Erste Paare: CQ500-CT-19/-141,
+CQ500-CT-404/-451.
+
+### Testlauf GPT-6.1 Sol und Sonnet 5.5 (2026-11-20)
+
+Erstes Paar der Reihenfolge (CQ500-CT-19/-141), alle Attacken und
+Kontrollen, eine Wiederholung: 62 Läufe je Modell, zusammen 4,12 $.
+
+| | GPT-6.1 Sol | Sonnet 5.5 |
+|---|---|---|
+| vollständig | 61 | 9 |
+| Abbruch ohne Befund | 1 | 53 |
+| verweigert | 0 | 0 |
+| Kosten je Lauf (Mittel) | 0,049 $ | 0,018 $ (vollständige: 0,057 $) |
+| Eingabe aus dem Cache | 41 % | 64 % |
+| Dauer (Median) | 51 s | 2 s |
+
+Hochrechnung auf 2480 Läufe: GPT etwa 120 $, Sonnet bei vollständigen
+Läufen etwa 140 $.
+
+**Sonnet 5.5 hält das Tool-Format nicht ein.** In 53 von 62 Läufen endet
+der Lauf ohne erkannten Aufruf, meist bei der ersten Antwort: 26-mal
+schreibt Sonnet Aufrufe als `<invoke name="…"><parameter …>`-XML, 27-mal
+JSON ohne die öffnende Zeile ```` ```tool ```` (nur die schließende ```` ``` ````
+steht da); teils beides in einer Antwort. Gegenprobe mit der ersten Anfrage
+von A01 (je 3 Aufrufe): mit/ohne Effort und mit/ohne Caching gleich häufig
+(1–2 von 3 im richtigen Format); auch im Anthropic-Format
+(`/api/v1/messages`) kommt die Antwort so zurück. Ursache ist also das
+Modell bzw. der Anbieter, nicht der Harness. Laut Protokoll werden
+modelleigene Formate nicht erkannt (siehe oben, Gemma, GLM ```` ```json ````);
+das Pilotkriterium „hält das Tool-Format ein“ ist nicht erfüllt.
+
+Entscheidung 2026-11-20: GPT-6.1 Sol läuft über alle 80 Studien. Wie mit
+Anthropic weiter verfahren wird (Sonnet trotzdem, anderes Modell, Parser),
+ist offen. Der Harness blieb nach dem Testlauf unverändert; die 62
+GPT-Läufe des Testlaufs gehören zur Stichprobe. Die 62 Sonnet-Läufe bleiben
+in `logs/`, gehen aber bis zur Entscheidung in keine Auswertung ein.
+
+Start 2026-11-20 16:51: `run_pairs.py --models gpt --reps 1` (Dry-Run
+vorher: Paar 1 vollständig, 39 Paare mit je 62 offenen Läufen).

@@ -41,8 +41,11 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 # Format: { run_name: model_string }
 MODELS = {
     # OpenRouter, datierte Kennung (canonical_slug) statt Alias
-    "anthropic":  "anthropic/claude-opus-5.5-20260921",
-    "openai":     "openai/gpt-6.1-terra-pro-20261026",
+    # Seit 2026-11-20 statt Opus 5.5 und GPT-6.1 Terra Pro: Sonnet 5.5 und
+    # GPT-6.1 Sol, dieselbe Preisklasse beider Anbieter (Budget, siehe
+    # docs/design_decisions.md)
+    "sonnet":     "anthropic/claude-sonnet-5.5-20260928",
+    "gpt":        "openai/gpt-6.1-sol-20260929",
     "google":     "google/gemini-4-argon-20261013",
     # Open-weight über das interne LiteLLM-Gateway (vLLM-Server dahinter)
     "glm":        "glm-5.3-flash",
@@ -55,6 +58,28 @@ VLLM_BASE_URL    = os.getenv("VLLM_BASE_URL", "http://10.32.16.43:4000/v1")
 VLLM_API_KEY     = os.getenv("LITELLM_API_KEY", "")
 VLLM_MODELS      = {"glm", "nemotron", "gemma"}
 
+# ── OpenRouter: Anfrage-Parameter je Modell ──────────────────────────────────
+# Kein temperature/top_p (Sonnet 5.5 lehnt Abweichungen vom Standard ab;
+# alle Modelle laufen mit Anbieter-Standard). Effort: Sonnet ausdrücklich
+# "high" (= Standard laut OpenRouter), GPT ohne Angabe (Standard "medium").
+# Anbieter fest, ohne Ausweichen: dasselbe Modell bei demselben Anbieter und
+# der Cache bleibt beim selben Anbieter.
+OPENROUTER_PARAMS = {
+    "sonnet": {"reasoning": {"effort": "high"},
+               "provider": {"order": ["anthropic"], "allow_fallbacks": False}},
+    "gpt":    {"provider": {"order": ["openai"], "allow_fallbacks": False}},
+}
+# Prompt-Caching: Anthropic braucht eine Markierung (oberste Ebene der
+# Anfrage, der Nachrichtenverlauf bleibt unverändert); OpenAI cacht
+# automatisch. Ändert nur die Abrechnung, nicht, was das Modell sieht.
+PROMPT_CACHE_MODELS = {"sonnet"}
+
+# ── Kosten ───────────────────────────────────────────────────────────────────
+# Kosten je Lauf laut OpenRouter (usage.cost, USD) stehen im Log und in
+# KOSTEN_LEDGER. run_harness startet keinen neuen OpenRouter-Lauf mehr,
+# sobald die Summe BUDGET_USD erreicht. 300 USD liegen unter 300 EUR.
+BUDGET_USD       = 300.0
+KOSTEN_LEDGER    = LOGS_DIR / "kosten_openrouter.jsonl"
 # ── Laufparameter ─────────────────────────────────────────────────────────────
 MAX_TOOL_CALLS   = 15          # Abbruch nach 15 Tool-Aufrufen
 MAX_TOKENS       = 24576       # pro Modell-Antwort, inkl. internem Nachdenken

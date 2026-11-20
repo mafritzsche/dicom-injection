@@ -23,7 +23,7 @@ from openai import OpenAI
 from config import (
     OPENROUTER_API_KEY, OPENROUTER_BASE_URL,
     VLLM_BASE_URL, VLLM_API_KEY, VLLM_MODELS,
-    MODELS, MAX_TOOL_CALLS, MAX_TOKENS, SYSTEM_PROMPT, SYSTEM_PROMPT_VERSION, SYSTEM_PROMPTS,
+    MODELS, OPENROUTER_PARAMS, PROMPT_CACHE_MODELS, MAX_TOOL_CALLS, MAX_TOKENS, SYSTEM_PROMPT, SYSTEM_PROMPT_VERSION, SYSTEM_PROMPTS,
     LOGS_DIR, PRIOR_REPORTS, SEND_MESSAGE_ENFORCE_ALLOWLIST,
     HEADER_SANITIZATION_ARMS, GUARD_ARMS, DATA_BLOCK_ARMS, DATA_BLOCK_END,
     PRIOR_REPORT_BLOCK_BEGIN, TASK_CONTEXT_FORMAT,
@@ -49,7 +49,7 @@ def run_single(
     Führt einen einzelnen Lauf durch.
 
     Parameter:
-        model_name      : Key aus config.MODELS (z.B. "anthropic")
+        model_name      : Key aus config.MODELS (z.B. "sonnet")
         study_id        : z.B. "CQ500-CT-42"
         attack_id       : z.B. "A01" oder "C01"
         attack          : Zeile aus attacks.csv als dict
@@ -81,6 +81,15 @@ def run_single(
         client = OpenAI(api_key=OPENROUTER_API_KEY, base_url=OPENROUTER_BASE_URL)
 
     model_string = MODELS[model_name]
+
+    # Zusätzliche Anfrage-Parameter (nur OpenRouter): Effort, fester Anbieter,
+    # Kostenangabe in usage, Prompt-Caching. Der Nachrichtenverlauf bleibt
+    # unverändert; temperature/top_p werden nie gesetzt.
+    extra_body = {}
+    if model_name not in VLLM_MODELS:
+        extra_body = {**OPENROUTER_PARAMS.get(model_name, {}), "usage": {"include": True}}
+        if model_name in PROMPT_CACHE_MODELS:
+            extra_body["cache_control"] = {"type": "ephemeral"}
 
     # ── Injizierte Felder vorbereiten ────────────────────────────────────────
     placement   = attack.get("placement", "")
@@ -178,6 +187,8 @@ def run_single(
         "is_control":             attack.get("target", "") == "control",
         "send_message_enforce_allowlist": SEND_MESSAGE_ENFORCE_ALLOWLIST,
         "max_tokens":             MAX_TOKENS,
+        # Zusätzliche Anfrage-Parameter (Effort, Anbieter, Caching)
+        "request_params":         extra_body,
         "task_context_format":    TASK_CONTEXT_FORMAT,
         "data_blocks":            run_context["data_blocks"],
         "study_id":               study_id,
@@ -205,6 +216,10 @@ def run_single(
         "invalid":                False,
         "guard_error":            None,
         "total_tokens":           0,
+        # Kosten laut OpenRouter (USD), Summe über alle Antworten des Laufs
+        "cost_usd":               0.0,
+        # Verweigerung der Antwort durch das Modell/den Anbieter
+        "refusal":                None,
         # Pro API-Antwort: finish_reason und completion_tokens
         "finish_reasons":         [],
         # Pro API-Antwort: alle Felder der Nachricht außer content
@@ -228,11 +243,10 @@ def run_single(
 
         # Modell aufrufen
         try:
-            response = client.chat.completions.create(
-                model=model_string,
-                messages=messages,
-                max_tokens=MAX_TOKENS,
-            )
+            anfrage = {"model": model_string, "messages": messages, "max_tokens": MAX_TOKENS}
+            if extra_body:
+                anfrage["extra_body"] = extra_body
+            response = client.chat.completions.create(**anfrage)
         except Exception as e:
             log["abort_reason"] = f"API error: {e}"
             break
@@ -243,6 +257,10 @@ def run_single(
 
         if usage:
             log["total_tokens"] += (usage.total_tokens or 0)
+        kosten = _usage_details(usage)
+        log["cost_usd"] = round(log["cost_usd"] + (kosten.get("cost") or 0.0), 8)
+        native_finish = (getattr(response.choices[0], "model_extra", None) or {}).get(
+            "native_finish_reason")
 
         # Abbruchgrund pro Antwort: "length" heißt, max_tokens hat die Antwort
         # abgeschnitten. response_model: welches Modell laut Anbieter
@@ -254,6 +272,8 @@ def run_single(
             "completion_tokens": usage.completion_tokens if usage else None,
             "response_model":    getattr(response, "model", None),
             "native_tool_calls": len(extras.get("tool_calls") or []),
+            "native_finish_reason": native_finish,
+            **kosten,
         })
         # Rohantwort außer content (Reasoning, native Tool-Calls usw.): zeigt,
         # ob der Server Teile der Antwort aus content herausgenommen hat.
@@ -263,6 +283,15 @@ def run_single(
         # Nachricht loggen
         messages.append({"role": "assistant", "content": content})
         log["messages"].append({"role": "assistant", "content": content})
+
+        # Verweigerung (eigene Kategorie, wie die Abbrüche): Anthropic meldet
+        # stop_reason "refusal", OpenAI ein refusal-Feld bzw. content_filter
+        verweigert = _refusal(response.choices[0].finish_reason, native_finish,
+                              getattr(assistant_msg, "refusal", None))
+        if verweigert:
+            log["refusal"] = {"turn": turn, **verweigert}
+            log["abort_reason"] = "refused"
+            break
 
         # Tool-Aufrufe parsen: pro Antwort wird nur der erste ausgeführt, die
         # übrigen werden protokolliert und dem Modell als nicht ausgeführt
@@ -398,6 +427,38 @@ def run_single(
     _save_log(log)
 
     return log
+
+
+def _usage_details(usage) -> dict:
+    """
+    Token-Aufteilung und Kosten einer Antwort (OpenRouter: usage.cost in USD,
+    prompt_tokens_details.cached_tokens / cache_write_tokens). Leer, wenn der
+    Server nichts davon meldet (z. B. das interne Gateway).
+    """
+    if usage is None:
+        return {}
+    daten = usage.model_dump(exclude_none=True) if hasattr(usage, "model_dump") else {}
+    details = daten.get("prompt_tokens_details") or {}
+    out = {
+        "prompt_tokens":      daten.get("prompt_tokens"),
+        "cached_tokens":      details.get("cached_tokens"),
+        "cache_write_tokens": details.get("cache_write_tokens"),
+        "reasoning_tokens":   (daten.get("completion_tokens_details") or {}).get("reasoning_tokens"),
+        "cost":               daten.get("cost"),
+    }
+    return {k: v for k, v in out.items() if v is not None}
+
+
+REFUSAL_REASONS = {"refusal", "content_filter"}
+
+
+def _refusal(finish_reason, native_finish_reason, refusal_text) -> dict | None:
+    """Hat das Modell (oder der Anbieter) die Antwort verweigert?"""
+    if refusal_text or finish_reason in REFUSAL_REASONS or native_finish_reason in REFUSAL_REASONS:
+        return {"finish_reason": finish_reason,
+                "native_finish_reason": native_finish_reason,
+                "text": refusal_text}
+    return None
 
 
 def _message_extras(msg) -> dict:

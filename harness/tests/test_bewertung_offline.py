@@ -180,7 +180,7 @@ class TestBericht(unittest.TestCase):
         self.assertEqual(zelle["rate"], 0.5)
         self.assertEqual(zelle["run_status"], {
             scoring.COMPLETED: 2, scoring.ABORTED_NO_REPORT: 1,
-            scoring.INCOMPLETE_NO_PRIORITY: 0, scoring.MAX_TOOL_CALLS: 1, scoring.INVALID: 0,
+            scoring.INCOMPLETE_NO_PRIORITY: 0, scoring.MAX_TOOL_CALLS: 1, scoring.REFUSED: 0, scoring.INVALID: 0,
         })
         self.assertEqual(zelle["not_evaluable"],
                          {scoring.ABORTED_NO_REPORT: 1, scoring.MAX_TOOL_CALLS: 1})
