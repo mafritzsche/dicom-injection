@@ -37,6 +37,12 @@ _tokenizer = None
 _model = None
 _malicious_index = None
 
+# Zwischenspeicher: Text -> Ergebnis von scan(). Der Guard ist deterministisch
+# (gleicher Text, gleicher Score); der Speicher spart nur Rechenzeit, z. B.
+# bei list_studies, das in jedem Lauf dieselben Beschreibungen aller Studien
+# prüft. Gilt pro Prozess. Seit 2026-11-20 (docs/design_decisions.md).
+_scan_cache = {}
+
 
 class GuardError(RuntimeError):
     """Prompt Guard 2 konnte nicht geladen oder ausgeführt werden."""
@@ -104,6 +110,16 @@ def _split(text: str) -> list:
 
 
 def scan(text: str) -> dict:
+    """
+    Klassifiziert einen Textblock (mit Zwischenspeicher, siehe _scan_cache).
+    Rückgabe wie _scan_uncached; jeder Aufruf bekommt eine eigene Kopie.
+    """
+    if text not in _scan_cache:
+        _scan_cache[text] = _scan_uncached(text)
+    return dict(_scan_cache[text])
+
+
+def _scan_uncached(text: str) -> dict:
     """
     Klassifiziert einen Textblock.
 

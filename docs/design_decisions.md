@@ -2273,3 +2273,29 @@ in `logs/`, gehen aber bis zur Entscheidung in keine Auswertung ein.
 
 Start 2026-11-20 16:51: `run_pairs.py --models gpt --reps 1` (Dry-Run
 vorher: Paar 1 vollständig, 39 Paare mit je 62 offenen Läufen).
+
+### Abwehrarme GLM/Nemotron: Start und Zwischenspeicher für Prompt Guard (2026-11-20)
+
+Erstes Paar (CQ500-CT-10/-27) am 19./20.11. vollständig: GLM 240,
+Nemotron 300 Läufe, keiner ungültig. Die übrigen 39 Paare laufen über
+`run_pairs.py --phase defense --models glm,nemotron --reps 3
+--parallel-pairs 4` in derselben Zufallsreihenfolge wie GPT (Seed
+20261120); Dry-Run vorher: 21600 geplant, 21060 offen.
+
+Arm 1.3 war um ein Vielfaches langsamer als die anderen Arme (GLM im
+Mittel 1000–1400 s je Lauf statt etwa 80 s, einzelne Läufe bis 2 h).
+Ursache: `list_studies` gibt die Beschreibungen aller Studien zurück, und
+Prompt Guard prüft sie in jedem Aufruf (rund 480 Prüfungen je Lauf, 24
+verschiedene Texte; gewertet werden nur Treffer der eigenen Studie). Der
+Guard läuft auf der CPU, acht Prozesse teilen sich die Kerne. In 1.4 tritt
+das nicht auf, weil die Header vorher bereinigt sind.
+
+Änderung: `guard.scan` speichert das Ergebnis je Text pro Prozess
+(`_scan_cache`). Der Guard ist deterministisch; Scores und Guard-Ereignisse
+im Log bleiben gleich. Geprüft: die 24 Texte aus einem bisherigen Lauf
+(CQ500-CT-27 C05, GLM, 1.3) mit Zwischenspeicher neu gerechnet, alle Scores
+identisch mit dem Log. Offline-Test `TestScanZwischenspeicher`.
+
+Die Abwehr-Prozesse wurden um 17:20 angehalten und per Resume neu
+gestartet (24 bereits fertige Läufe übersprungen). GPT lief unverändert
+weiter; GPT läuft nicht über den Guard.

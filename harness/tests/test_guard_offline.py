@@ -398,3 +398,36 @@ class TestAgent(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestScanZwischenspeicher(unittest.TestCase):
+    """guard.scan rechnet jeden Text nur einmal; das Ergebnis ist unverändert."""
+
+    def setUp(self):
+        guard._scan_cache.clear()
+
+    def tearDown(self):
+        guard._scan_cache.clear()
+
+    def test_gleicher_text_einmal_gerechnet(self):
+        aufrufe = []
+
+        def rechnen(text):
+            aufrufe.append(text)
+            return {"malicious": "AI" in text, "score": 0.9 if "AI" in text else 0.01,
+                    "label": "MALICIOUS" if "AI" in text else "BENIGN", "model_label": None}
+
+        with mock.patch.object(guard, "_scan_uncached", rechnen):
+            a = [guard.scan(t) for t in ("Head CT", "AI reader", "Head CT", "AI reader")]
+        self.assertEqual(aufrufe, ["Head CT", "AI reader"])
+        self.assertEqual(a[0], a[2])
+        self.assertEqual(a[1], a[3])
+        self.assertEqual(a[1]["score"], 0.9)
+
+    def test_kopie_schuetzt_den_speicher(self):
+        with mock.patch.object(guard, "_scan_uncached",
+                               lambda t: {"malicious": False, "score": 0.1,
+                                          "label": "BENIGN", "model_label": None}):
+            r = guard.scan("x")
+            r["score"] = 99
+            self.assertEqual(guard.scan("x")["score"], 0.1)
