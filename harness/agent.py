@@ -251,6 +251,15 @@ def run_single(
             log["abort_reason"] = f"API error: {e}"
             break
 
+        # Antwort ohne choices (z. B. Fehler beim Anbieter, von OpenRouter mit
+        # Status 200 weitergereicht): als API-Fehler werten, Resume wiederholt
+        if not getattr(response, "choices", None):
+            extra = getattr(response, "model_extra", None) or {}
+            log["abort_reason"] = f"API error: Antwort ohne choices: {extra.get('error') or extra}"[:2000]
+            log["cost_usd"] = round(log["cost_usd"] + (_usage_details(
+                getattr(response, "usage", None)).get("cost") or 0.0), 8)
+            break
+
         assistant_msg = response.choices[0].message
         content       = assistant_msg.content or ""
         usage         = response.usage
