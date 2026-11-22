@@ -2299,3 +2299,27 @@ identisch mit dem Log. Offline-Test `TestScanZwischenspeicher`.
 Die Abwehr-Prozesse wurden um 17:20 angehalten und per Resume neu
 gestartet (24 bereits fertige Läufe übersprungen). GPT lief unverändert
 weiter; GPT läuft nicht über den Guard.
+
+### GPT-6.1 Sol: Lauf abgeschlossen, Absturz bei Paar 9 und Nachholläufe (2026-11-22)
+
+Der Lauf über alle 40 Paare endete am 21.11. um 17:56. Paar 9
+(CQ500-CT-225 und Partner) brach am 20.11. nach 9 von 62 Läufen ab:
+OpenRouter lieferte eine Antwort ohne `choices` (Status 200, offenbar ein
+Fehler beim Anbieter). Der Harness las `response.choices[0]` und beendete
+den Prozess mit `TypeError`; der Inhalt der Antwort ist deshalb nicht
+protokolliert. Dazu kamen 6 Läufe mit „API error: 400 – JSON parsing
+failed“ (je einer bei CQ500-CT-180, -214, -140, -460, -84, -58).
+
+Änderung (Commit 3fcf7ac): Eine Antwort ohne `choices` wird als
+„API error“ protokolliert (mit dem Fehlerfeld der Antwort, sofern
+vorhanden) und beim Resume wiederholt wie andere API-Fehler. Die Bewertung
+ändert sich nicht; betroffen ist nur der Fehlerpfad. Alle 142
+Offline-Tests laufen.
+
+Am 22.11. wurden die 60 offenen Läufe per Resume nachgeholt
+(`run_harness.py --phase attack --models gpt --reps 1` über alle 80
+Studien), ohne neuen API-Fehler. Danach Dry-Run: 2480 Läufe, 0 offen.
+
+Stand: 2470 Läufe vollständig, 10 Abbruch ohne Befund, 0 Verweigerungen,
+0 ungültig. Kosten laut Logs 105,40 USD (0,042 USD je Lauf), 55 % der
+Eingabe-Tokens aus dem Cache, Median 74 s je Lauf.
