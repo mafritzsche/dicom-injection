@@ -2350,3 +2350,14 @@ Lauf mit einer Fehlermeldung ab. Offline-Tests: Key je Modell, Kostenbuch
 je Key, GPT läuft weiter, wenn das Budget des Sonnet-Keys erreicht ist
 (146 Tests, alle bestanden). Die laufenden Abwehrarme von GLM und Nemotron
 (Gateway) sind nicht betroffen.
+
+Nachtrag: Der neue Key ist ein BYOK-Key (OpenRouter leitet an einen
+hinterlegten OpenAI-Key weiter; abgerechnet wird direkt bei OpenAI).
+OpenRouter meldet dann `usage.cost = 0`; die tatsächlichen Kosten stehen
+in `cost_details.upstream_inference_cost`, das der Harness nicht übernimmt.
+Im Kostenbuch `kosten_openrouter_gpt_google.jsonl` und in `cost_usd` der
+Logs steht für diesen Key deshalb 0. Die Kosten dieses Keys sind für das
+Projektbudget nicht relevant und werden bewusst nicht erfasst. Die
+Token-Zahlen je Antwort (Eingabe, davon Cache, Ausgabe, Reasoning) sind
+vollständig protokolliert; die Kosten lassen sich bei Bedarf daraus
+nachrechnen.
