@@ -36,8 +36,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from config import BUDGET_USD, LOGS_DIR, VLLM_MODELS
-from run_harness import load_subset, kosten_bisher
+from config import LOGS_DIR, VLLM_MODELS, MODEL_OPENROUTER_KEY, OPENROUTER_KEYS
+from run_harness import load_subset, kosten_bisher, budget_fuer
 
 SEED_STANDARD = 20261120
 HARNESS = Path(__file__).resolve().parent / "run_harness.py"
@@ -71,10 +71,22 @@ def reihenfolge(alle: list, seed: int) -> list:
 def befehl(model: str, paar: tuple, args, dry_run: bool) -> list:
     cmd = [sys.executable, "-u", str(HARNESS), "--phase", args.phase,
            "--models", model, "--studies", ",".join(paar),
-           "--reps", str(args.reps), "--budget-usd", str(args.budget_usd)]
+           "--reps", str(args.reps)]
+    if args.budget_usd is not None:
+        cmd += ["--budget-usd", str(args.budget_usd)]
     if dry_run:
         cmd.append("--dry-run")
     return cmd
+
+
+def kostenstand(args) -> str:
+    """OpenRouter-Kosten je Key, mit Budget, wo eines gilt."""
+    teile = []
+    for k in OPENROUTER_KEYS:
+        grenze = budget_fuer(k, args.budget_usd)
+        teile.append(f"{k} {kosten_bisher(k):.2f} USD"
+                     + (f" von {grenze:.2f}" if grenze is not None else " (ohne Budget)"))
+    return "OpenRouter-Kosten: " + "; ".join(teile)
 
 
 def main():
@@ -87,7 +99,8 @@ def main():
                     help="nur die ersten N Paare der Reihenfolge (z. B. 1 für den Testlauf)")
     ap.add_argument("--parallel-pairs", type=int, default=2,
                     help="so viele Paare gleichzeitig (je Paar ein Prozess pro Modell)")
-    ap.add_argument("--budget-usd", type=float, default=BUDGET_USD)
+    ap.add_argument("--budget-usd", type=float, default=None,
+                    help="ersetzt das Budget der Keys mit Budget (config.OPENROUTER_KEYS)")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
@@ -107,12 +120,14 @@ def main():
                 out = subprocess.run(befehl(m, p, args, True), capture_output=True, text=True)
                 plan = [z for z in out.stdout.splitlines() if z.startswith("Plan:")]
                 print(f"  Paar {k} {m}: {plan[0] if plan else out.stdout.strip()[-200:]}")
-        print(f"\nBisherige OpenRouter-Kosten: {kosten_bisher():.2f} USD "
-              f"(Budget {args.budget_usd:.2f} USD)")
+        print()
+        print(kostenstand(args))
         print("Dry-Run: nichts ausgeführt.")
         return
 
-    kostenpflichtig = any(m not in VLLM_MODELS for m in models)
+    # Keys mit Budget, über die eines der Modelle läuft
+    budget_keys = {MODEL_OPENROUTER_KEY[m] for m in models if m not in VLLM_MODELS
+                   and budget_fuer(MODEL_OPENROUTER_KEY[m], args.budget_usd) is not None}
     laufend = []          # (paar_nr, model, Popen, logdatei)
     naechstes = 0
     budget_erreicht = False
@@ -121,9 +136,12 @@ def main():
         # neue Paare starten, solange Platz ist und Budget übrig
         while (naechstes < len(folge) and not budget_erreicht
                and len({nr for nr, *_ in laufend}) < args.parallel_pairs):
-            if kostenpflichtig and kosten_bisher() >= args.budget_usd:
+            voll = [k for k in budget_keys
+                    if kosten_bisher(k) >= budget_fuer(k, args.budget_usd)]
+            if voll:
                 budget_erreicht = True
-                print(f"Budget erreicht ({kosten_bisher():.2f} USD), keine neuen Paare.")
+                print(f"Budget erreicht (Key {', '.join(voll)}), keine neuen Paare. "
+                      f"{kostenstand(args)}")
                 break
             p = folge[naechstes]
             naechstes += 1
@@ -149,11 +167,11 @@ def main():
                 f.close()
                 laufend.remove(eintrag)
                 print(f"[{datetime.now():%Y-%m-%d %H:%M}] Paar {nr} {m} fertig "
-                      f"(Exit {proc.returncode}); Kosten bisher {kosten_bisher():.2f} USD",
+                      f"(Exit {proc.returncode}); {kostenstand(args)}",
                       flush=True)
 
     print(f"\nEnde. Gestartete Paare: {naechstes} von {len(folge)}. "
-          f"OpenRouter-Kosten gesamt: {kosten_bisher():.2f} USD")
+          f"{kostenstand(args)}")
 
 
 if __name__ == "__main__":

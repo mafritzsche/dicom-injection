@@ -31,7 +31,17 @@ ORTHANC_USER     = os.getenv("ORTHANC_USER", "")
 ORTHANC_PASS     = os.getenv("ORTHANC_PASS", "")
 
 # ── API ───────────────────────────────────────────────────────────────────────
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+# Zwei OpenRouter-Keys, getrennt abgerechnet (2026-11-24): Sonnet über den
+# alten Key mit Budget, GPT und Google über einen Key ohne Limit. Jeder Key
+# hat ein eigenes Kostenbuch in LOGS_DIR; None = kein Budget-Stopp.
+OPENROUTER_KEYS = {
+    "sonnet":     {"env": "OPENROUTER_API_KEY_sonnet",
+                   "ledger": "kosten_openrouter.jsonl", "budget_usd": 300.0},
+    "gpt_google": {"env": "OPENROUTER_API_KEY_GPT_GOOGLE",
+                   "ledger": "kosten_openrouter_gpt_google.jsonl", "budget_usd": None},
+}
+MODEL_OPENROUTER_KEY = {"sonnet": "sonnet", "gpt": "gpt_google", "google": "gpt_google"}
+OPENROUTER_API_KEYS = {k: os.getenv(v["env"]) for k, v in OPENROUTER_KEYS.items()}
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 # ── Modelle ───────────────────────────────────────────────────────────────────
@@ -75,11 +85,11 @@ OPENROUTER_PARAMS = {
 PROMPT_CACHE_MODELS = {"sonnet"}
 
 # ── Kosten ───────────────────────────────────────────────────────────────────
-# Kosten je Lauf laut OpenRouter (usage.cost, USD) stehen im Log und in
-# KOSTEN_LEDGER. run_harness startet keinen neuen OpenRouter-Lauf mehr,
-# sobald die Summe BUDGET_USD erreicht. 300 USD liegen unter 300 EUR.
-BUDGET_USD       = 300.0
-KOSTEN_LEDGER    = LOGS_DIR / "kosten_openrouter.jsonl"
+# Kosten je Lauf laut OpenRouter (usage.cost, USD) stehen im Log und im
+# Kostenbuch des jeweiligen Keys (OPENROUTER_KEYS). run_harness startet für
+# einen Key mit Budget keinen neuen Lauf mehr, sobald dessen Summe das Budget
+# erreicht. Das bisherige kosten_openrouter.jsonl ist das Kostenbuch des
+# alten Keys (sonnet), einschließlich der GPT-Angriffsläufe.
 # ── Laufparameter ─────────────────────────────────────────────────────────────
 MAX_TOOL_CALLS   = 15          # Abbruch nach 15 Tool-Aufrufen
 MAX_TOKENS       = 24576       # pro Modell-Antwort, inkl. internem Nachdenken

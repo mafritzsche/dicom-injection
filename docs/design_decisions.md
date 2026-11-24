@@ -2323,3 +2323,30 @@ Studien), ohne neuen API-Fehler. Danach Dry-Run: 2480 Läufe, 0 offen.
 Stand: 2470 Läufe vollständig, 10 Abbruch ohne Befund, 0 Verweigerungen,
 0 ungültig. Kosten laut Logs 105,40 USD (0,042 USD je Lauf), 55 % der
 Eingabe-Tokens aus dem Cache, Median 74 s je Lauf.
+
+### Zwei OpenRouter-Keys, getrennt abgerechnet (2026-11-24)
+
+Seit 24.11. gibt es einen zweiten OpenRouter-Key ohne Ausgabenlimit, nur
+für Google- und OpenAI-Modelle. Der bisherige Key (Budget 300 USD) bleibt
+für Anthropic. Damit die Kosten je Key nachvollziehbar sind, ist jedem
+Modell ein Key fest zugeordnet (`config.OPENROUTER_KEYS`,
+`MODEL_OPENROUTER_KEY`):
+
+| Key (Label) | Variable in `.env` | Modelle | Kostenbuch in `logs/` | Budget-Stopp |
+|---|---|---|---|---|
+| sonnet | `OPENROUTER_API_KEY_sonnet` | sonnet | `kosten_openrouter.jsonl` | 300 USD |
+| gpt_google | `OPENROUTER_API_KEY_GPT_GOOGLE` | gpt, google | `kosten_openrouter_gpt_google.jsonl` | keiner |
+
+Das bisherige Kostenbuch `kosten_openrouter.jsonl` gehört vollständig zum
+alten Key und bleibt unverändert: 106,57 USD, davon die GPT-Angriffsläufe
+(105,40 USD), der Testlauf und die Sonnet-Tests. Für Anthropic bleiben
+damit 193,43 USD.
+
+Jedes neue Lauf-Log enthält `openrouter_key` (nur das Label, nicht den
+Key); jeder Eintrag im Kostenbuch ebenso. Die Budget-Prüfung in
+`run_harness` und `run_pairs` gilt nur für Keys mit Budget; `--budget-usd`
+ersetzt deren Grenze. Fehlt der Key eines Modells in `.env`, bricht der
+Lauf mit einer Fehlermeldung ab. Offline-Tests: Key je Modell, Kostenbuch
+je Key, GPT läuft weiter, wenn das Budget des Sonnet-Keys erreicht ist
+(146 Tests, alle bestanden). Die laufenden Abwehrarme von GLM und Nemotron
+(Gateway) sind nicht betroffen.

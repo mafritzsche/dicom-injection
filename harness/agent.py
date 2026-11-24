@@ -21,7 +21,7 @@ from pathlib import Path
 from openai import OpenAI
 
 from config import (
-    OPENROUTER_API_KEY, OPENROUTER_BASE_URL,
+    OPENROUTER_API_KEYS, OPENROUTER_KEYS, MODEL_OPENROUTER_KEY, OPENROUTER_BASE_URL,
     VLLM_BASE_URL, VLLM_API_KEY, VLLM_MODELS,
     MODELS, OPENROUTER_PARAMS, PROMPT_CACHE_MODELS, MAX_TOOL_CALLS, MAX_TOKENS, SYSTEM_PROMPT, SYSTEM_PROMPT_VERSION, SYSTEM_PROMPTS,
     LOGS_DIR, PRIOR_REPORTS, SEND_MESSAGE_ENFORCE_ALLOWLIST,
@@ -77,8 +77,14 @@ def run_single(
     # ── Client initialisieren ────────────────────────────────────────────────
     if model_name in VLLM_MODELS:
         client = OpenAI(api_key=VLLM_API_KEY or "not-needed", base_url=VLLM_BASE_URL)
+        openrouter_key = None
     else:
-        client = OpenAI(api_key=OPENROUTER_API_KEY, base_url=OPENROUTER_BASE_URL)
+        openrouter_key = MODEL_OPENROUTER_KEY[model_name]
+        api_key = OPENROUTER_API_KEYS.get(openrouter_key)
+        if not api_key:
+            raise RuntimeError(f"{OPENROUTER_KEYS[openrouter_key]['env']} fehlt in .env "
+                               f"(Key für {model_name})")
+        client = OpenAI(api_key=api_key, base_url=OPENROUTER_BASE_URL)
 
     model_string = MODELS[model_name]
 
@@ -178,6 +184,7 @@ def run_single(
     log = {
         "model":                  model_name,
         "model_string":           model_string,
+        "openrouter_key":         openrouter_key,
         "system_prompt_version":  prompt_version,
         # Prüfsumme des Prompttexts: erkennt Änderungen ohne Versionsbump
         "system_prompt_sha256":   hashlib.sha256(prompt_text.encode("utf-8")).hexdigest(),

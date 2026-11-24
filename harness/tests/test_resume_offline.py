@@ -95,9 +95,7 @@ class TestResume(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.logs = Path(self.tmp.name)
         self.patches = [mock.patch.object(agent, "LOGS_DIR", self.logs),
-                        mock.patch.object(run_harness, "LOGS_DIR", self.logs),
-                        mock.patch.object(run_harness, "KOSTEN_LEDGER",
-                                          self.logs / "kosten.jsonl")]
+                        mock.patch.object(run_harness, "LOGS_DIR", self.logs)]
         for p in self.patches:
             p.start()
 
@@ -166,6 +164,34 @@ class TestResume(unittest.TestCase):
     def test_kosten_werden_gebucht(self):
         self.ausfuehren(FakeRunSingle())
         self.assertAlmostEqual(run_harness.kosten_bisher(), 6 * 1.5)
+        self.assertAlmostEqual(run_harness.kosten_bisher("sonnet"), 6 * 1.5)
+        self.assertEqual(run_harness.kosten_bisher("gpt_google"), 0.0)
+        self.assertTrue((self.logs / "kosten_openrouter.jsonl").exists())
+
+    def test_kostenbuch_je_key(self):
+        """GPT bucht in das Kostenbuch des Keys ohne Limit."""
+        fake = FakeRunSingle()
+        laeufe = [{**p, "model": "gpt"} for p in plan()]
+        with mock.patch.object(run_harness, "run_single", fake):
+            run_harness.execute(laeufe, ARGS, {})
+        self.assertAlmostEqual(run_harness.kosten_bisher("gpt_google"), 6 * 1.5)
+        self.assertEqual(run_harness.kosten_bisher("sonnet"), 0.0)
+        zeile = json.loads((self.logs / "kosten_openrouter_gpt_google.jsonl")
+                           .read_text(encoding="utf-8").splitlines()[0])
+        self.assertEqual(zeile["openrouter_key"], "gpt_google")
+
+    def test_gpt_ohne_budget_stopp(self):
+        """Ist das Budget des Sonnet-Keys erreicht, läuft GPT trotzdem weiter."""
+        self.ausfuehren(FakeRunSingle())                      # 9 USD auf sonnet
+        budget = SimpleNamespace(**{**vars(ARGS), "budget_usd": 1.0})
+        fake = FakeRunSingle()
+        laeufe = [{**p, "model": "gpt"} for p in plan()]
+        with mock.patch.object(run_harness, "run_single", fake):
+            run_harness.execute(laeufe, budget, {})
+        self.assertEqual(fake.n, 6)
+        self.assertIsNone(run_harness.budget_fuer("gpt_google", 1.0))
+        self.assertEqual(run_harness.budget_fuer("sonnet"), 300.0)
+        self.assertEqual(run_harness.budget_fuer("sonnet", 1.0), 1.0)
 
     def test_budget_stoppt_neue_laeufe(self):
         """Nach Erreichen des Budgets startet kein neuer Lauf; Resume setzt später fort."""
@@ -188,7 +214,7 @@ class TestResume(unittest.TestCase):
         with mock.patch.object(run_harness, "run_single", fake):
             run_harness.execute(laeufe, budget, {})
         self.assertEqual(fake.n, 6)
-        self.assertFalse((self.logs / "kosten.jsonl").exists())
+        self.assertEqual(list(self.logs.glob("kosten*.jsonl")), [])
 
     def test_halbe_datei_bleibt_nicht_liegen(self):
         """Abbruch mitten im Schreiben: weder Log noch Temporärdatei bleiben."""

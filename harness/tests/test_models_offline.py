@@ -69,7 +69,9 @@ class TestClient(unittest.TestCase):
             erstellt.append(kw)
             return antworten
 
+        keys = {"sonnet": "sk-sonnet", "gpt_google": "sk-gpt-google"}
         with mock.patch.object(agent, "OpenAI", client), \
+             mock.patch.dict(agent.OPENROUTER_API_KEYS, keys), \
              mock.patch.object(agent, "ensure_variant", return_value=None), \
              mock.patch.object(agent, "_save_log"):
             log = agent.run_single(
@@ -91,6 +93,27 @@ class TestClient(unittest.TestCase):
         kw, log = self.lauf("sonnet")
         self.assertEqual(kw["base_url"], config.OPENROUTER_BASE_URL)
         self.assertEqual(log["model_string"], "anthropic/claude-sonnet-5.5-20260928")
+
+    def test_key_je_modell(self):
+        """Sonnet über den alten Key, GPT über den Key ohne Limit; im Log nur das Label."""
+        kw, log = self.lauf("sonnet")
+        self.assertEqual(kw["api_key"], "sk-sonnet")
+        self.assertEqual(log["openrouter_key"], "sonnet")
+        kw, log = self.lauf("gpt")
+        self.assertEqual(kw["api_key"], "sk-gpt-google")
+        self.assertEqual(log["openrouter_key"], "gpt_google")
+        self.assertNotIn("sk-", str(log))
+        _, log = self.lauf("glm")
+        self.assertIsNone(log["openrouter_key"])
+
+    def test_key_zuordnung(self):
+        self.assertEqual(config.MODEL_OPENROUTER_KEY,
+                         {"sonnet": "sonnet", "gpt": "gpt_google", "google": "gpt_google"})
+        self.assertEqual(set(config.MODEL_OPENROUTER_KEY),
+                         set(config.MODELS) - config.VLLM_MODELS)
+        self.assertEqual(config.OPENROUTER_KEYS["sonnet"]["budget_usd"], 300.0)
+        self.assertIsNone(config.OPENROUTER_KEYS["gpt_google"]["budget_usd"])
+        self.assertEqual(config.OPENROUTER_KEYS["sonnet"]["ledger"], "kosten_openrouter.jsonl")
 
     def test_sonnet_parameter(self):
         """Effort high, fester Anbieter, Caching auf oberster Ebene, kein temperature/top_p."""

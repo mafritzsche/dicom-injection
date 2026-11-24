@@ -34,7 +34,7 @@ from agent import run_single, write_json_atomic
 from config import (
     ATTACK_ARM, ATTACKS_CSV, DEFENSE_ARMS, DEFENSE_THRESHOLD,
     ARM_IMPLEMENTED, MODELS, N_REPETITIONS, PRIOR_REPORTS, SUBSET_CSV, LOGS_DIR,
-    GUARD_ARMS, STICHPROBE_GRUPPEN, VLLM_MODELS, BUDGET_USD, KOSTEN_LEDGER,
+    GUARD_ARMS, STICHPROBE_GRUPPEN, VLLM_MODELS, OPENROUTER_KEYS, MODEL_OPENROUTER_KEY,
 )
 from scoring import (
     attack_success, attack_success_extended, is_applicable, not_evaluable_reason,
@@ -314,13 +314,15 @@ def execute(plan: list, args, done: dict) -> list:
                 print(f"[{i}/{gesamt}] übersprungen (vorhanden): {key}")
             continue
 
-        # Budget: kein neuer OpenRouter-Lauf, wenn die bisherigen Kosten
-        # (alle Prozesse, siehe KOSTEN_LEDGER) das Budget erreicht haben
+        # Budget: kein neuer Lauf über einen Key mit Budget, wenn dessen
+        # bisherige Kosten (alle Prozesse, Kostenbuch des Keys) es erreicht haben
         if p["model"] not in VLLM_MODELS:
-            ausgegeben = kosten_bisher()
-            if ausgegeben >= args.budget_usd:
-                print(f"Budget erreicht: {ausgegeben:.2f} USD von {args.budget_usd:.2f} USD. "
-                      f"Keine weiteren OpenRouter-Läufe.")
+            key = MODEL_OPENROUTER_KEY[p["model"]]
+            grenze = budget_fuer(key, args.budget_usd)
+            ausgegeben = kosten_bisher(key)
+            if grenze is not None and ausgegeben >= grenze:
+                print(f"Budget erreicht (Key {key}): {ausgegeben:.2f} USD von "
+                      f"{grenze:.2f} USD. Keine weiteren OpenRouter-Läufe.")
                 break
 
         prior = PRIOR_REPORTS / f"{p['study_id']}.txt"
@@ -366,12 +368,28 @@ def execute(plan: list, args, done: dict) -> list:
     return records
 
 
-def kosten_bisher() -> float:
-    """Summe der OpenRouter-Kosten (USD) aller bisher gebuchten Läufe."""
-    if not KOSTEN_LEDGER.exists():
+def kosten_ledger(key: str) -> Path:
+    """Kostenbuch eines OpenRouter-Keys."""
+    return LOGS_DIR / OPENROUTER_KEYS[key]["ledger"]
+
+
+def budget_fuer(key: str, override: float | None = None) -> float | None:
+    """Budget eines Keys; --budget-usd ersetzt es nur bei Keys mit Budget."""
+    grenze = OPENROUTER_KEYS[key]["budget_usd"]
+    if grenze is None:
+        return None
+    return override if override is not None else grenze
+
+
+def kosten_bisher(key: str | None = None) -> float:
+    """Summe der OpenRouter-Kosten (USD) eines Keys, ohne key über alle Keys."""
+    if key is None:
+        return sum(kosten_bisher(k) for k in OPENROUTER_KEYS)
+    ledger = kosten_ledger(key)
+    if not ledger.exists():
         return 0.0
     summe = 0.0
-    with open(KOSTEN_LEDGER, encoding="utf-8") as f:
+    with open(ledger, encoding="utf-8") as f:
         for zeile in f:
             try:
                 summe += float(json.loads(zeile).get("cost_usd") or 0.0)
@@ -381,17 +399,19 @@ def kosten_bisher() -> float:
 
 
 def kosten_buchen(log: dict, path):
-    """Hängt die Kosten eines Laufs an KOSTEN_LEDGER an (sicher bei parallelen Prozessen)."""
+    """Hängt die Kosten eines Laufs an das Kostenbuch seines Keys an (sicher bei parallelen Prozessen)."""
     import fcntl
-    KOSTEN_LEDGER.parent.mkdir(parents=True, exist_ok=True)
+    key = log.get("openrouter_key") or MODEL_OPENROUTER_KEY[log.get("model")]
+    ledger = kosten_ledger(key)
+    ledger.parent.mkdir(parents=True, exist_ok=True)
     eintrag = {
         "finished_at": log.get("finished_at"), "model": log.get("model"),
         "study_id": log.get("study_id"), "attack_id": log.get("attack_id"),
         "arm": log.get("system_prompt_version"), "rep": log.get("repetition"),
         "abort_reason": log.get("abort_reason"), "cost_usd": log.get("cost_usd") or 0.0,
-        "log_path": str(path) if path else None,
+        "openrouter_key": key, "log_path": str(path) if path else None,
     }
-    with open(KOSTEN_LEDGER, "a", encoding="utf-8") as f:
+    with open(ledger, "a", encoding="utf-8") as f:
         fcntl.flock(f, fcntl.LOCK_EX)
         f.write(json.dumps(eintrag, ensure_ascii=False) + "\n")
         f.flush()
@@ -559,8 +579,8 @@ def main():
     ap.add_argument("--threshold", type=float, default=DEFENSE_THRESHOLD)
     ap.add_argument("--threshold-group", choices=["model", "global"], default="model",
                     help="Schwelle je Modell+Attacke oder über alle Modelle")
-    ap.add_argument("--budget-usd", type=float, default=BUDGET_USD,
-                    help="OpenRouter-Kosten, ab denen keine neuen Läufe starten")
+    ap.add_argument("--budget-usd", type=float, default=None,
+                    help="ersetzt das Budget der Keys mit Budget (config.OPENROUTER_KEYS)")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--no-resume", action="store_true",
                     help="auch bereits protokollierte Läufe erneut ausführen")
