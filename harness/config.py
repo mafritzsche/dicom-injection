@@ -78,6 +78,9 @@ OPENROUTER_PARAMS = {
     "sonnet": {"reasoning": {"effort": "high"},
                "provider": {"order": ["anthropic"], "allow_fallbacks": False}},
     "gpt":    {"provider": {"order": ["openai"], "allow_fallbacks": False}},
+    # Gemini: auf OpenRouter nur Google Vertex; global, nicht die teurere
+    # Priority-Variante. Reasoning auf Standard wie GPT.
+    "google": {"provider": {"order": ["google-vertex/global"], "allow_fallbacks": False}},
 }
 # Prompt-Caching: Anthropic braucht eine Markierung (oberste Ebene der
 # Anfrage, der Nachrichtenverlauf bleibt unverändert); OpenAI cacht

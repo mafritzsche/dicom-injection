@@ -137,6 +137,16 @@ class TestClient(unittest.TestCase):
         self.assertNotIn("cache_control", eb)
         self.assertEqual(eb["provider"], {"order": ["openai"], "allow_fallbacks": False})
 
+    def test_google_parameter(self):
+        """Gemini: fester Anbieter Vertex (global), Reasoning Standard, kein cache_control."""
+        _, log = self.lauf("google")
+        eb = self.anfragen[0]["extra_body"]
+        self.assertEqual(eb["provider"], {"order": ["google-vertex/global"],
+                                          "allow_fallbacks": False})
+        self.assertNotIn("reasoning", eb)
+        self.assertNotIn("cache_control", eb)
+        self.assertEqual(log["openrouter_key"], "gpt_google")
+
     def test_nachrichten_unveraendert(self):
         """Caching ändert den Nachrichtenverlauf nicht: kein cache_control in messages."""
         self.lauf("sonnet")
