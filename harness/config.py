@@ -40,7 +40,7 @@ OPENROUTER_KEYS = {
     "gpt_google": {"env": "OPENROUTER_API_KEY_GPT_GOOGLE",
                    "ledger": "kosten_openrouter_gpt_google.jsonl", "budget_usd": None},
 }
-MODEL_OPENROUTER_KEY = {"sonnet": "sonnet", "gpt": "gpt_google", "google": "gpt_google"}
+MODEL_OPENROUTER_KEY = {"sonnet": "sonnet", "sonnet_native": "sonnet", "gpt": "gpt_google", "google": "gpt_google"}
 OPENROUTER_API_KEYS = {k: os.getenv(v["env"]) for k, v in OPENROUTER_KEYS.items()}
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
@@ -55,6 +55,9 @@ MODELS = {
     # GPT-6.1 Sol, dieselbe Preisklasse beider Anbieter (Budget, siehe
     # docs/design_decisions.md)
     "sonnet":     "anthropic/claude-sonnet-5.5-20260928",
+    # Dasselbe Modell über die native Tool-Schnittstelle (seit 2026-11-26,
+    # siehe NATIVE_TOOL_MODELS); "sonnet" bleibt der Textformat-Pfad
+    "sonnet_native": "anthropic/claude-sonnet-5.5-20260928",
     "gpt":        "openai/gpt-6.1-sol-20260929",
     "google":     "google/gemini-4-argon-20261013",
     # Open-weight über das interne LiteLLM-Gateway (vLLM-Server dahinter)
@@ -85,7 +88,27 @@ OPENROUTER_PARAMS = {
 # Prompt-Caching: Anthropic braucht eine Markierung (oberste Ebene der
 # Anfrage, der Nachrichtenverlauf bleibt unverändert); OpenAI cacht
 # automatisch. Ändert nur die Abrechnung, nicht, was das Modell sieht.
-PROMPT_CACHE_MODELS = {"sonnet"}
+PROMPT_CACHE_MODELS = {"sonnet", "sonnet_native"}
+
+# ── Native Tool-Schnittstelle (nur Claude) ───────────────────────────────────
+# Diese Modelle laufen über die Anthropic-Messages-Schnittstelle von
+# OpenRouter (/api/v1/messages, Anthropic-SDK): Werkzeuge im tools-Parameter,
+# Ergebnisse als tool_result-Blöcke (Bilder als Bildblöcke darin). Alle
+# anderen Modelle und "sonnet" bleiben beim Textformat (```tool-Blöcke).
+# Inhalte der Ergebnisse und Injektionen sind in beiden Pfaden identisch.
+NATIVE_TOOL_MODELS = {"sonnet_native"}
+ANTHROPIC_MESSAGES_BASE_URL = "https://openrouter.ai/api"
+# Anfrage-Parameter: adaptives Thinking mit Effort high (wie "sonnet"),
+# Zusammenfassung des Thinking nur fürs Protokoll; ein Aufruf pro Antwort
+# (entspricht "call one at a time"); fester Anbieter wie "sonnet".
+NATIVE_PARAMS = {
+    "sonnet_native": {
+        "thinking":      {"type": "adaptive", "display": "summarized"},
+        "output_config": {"effort": "high"},
+        "tool_choice":   {"type": "auto", "disable_parallel_tool_use": True},
+        "extra_body":    {"provider": {"order": ["anthropic"], "allow_fallbacks": False}},
+    },
+}
 
 # ── Kosten ───────────────────────────────────────────────────────────────────
 # Kosten je Lauf laut OpenRouter (usage.cost, USD) stehen im Log und im

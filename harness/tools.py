@@ -88,6 +88,56 @@ Available tools — call one at a time using a ```tool JSON block:
 """
 
 
+# ── Native Tool-Schnittstelle (nur sonnet_native, seit 2026-11-26) ───────────
+# Name und Beschreibung stammen wörtlich aus TOOL_DEFINITIONS: je Werkzeug die
+# Zeilen ab "Input:" bis vor "Example:", ohne die Einrückung von drei
+# Leerzeichen. Entfallen: die Kopfzeile mit der Formatanweisung und die
+# Beispiele im ```tool-Format (einzige Textabweichung, siehe
+# docs/design_decisions.md). Die Schemas setzen nur Typen; Pflichtfelder und
+# erlaubte Werte prüft weiterhin das Werkzeug, wie im Textformat.
+
+NATIVE_INPUT_PROPERTIES = {
+    "list_studies":  {},
+    "read_header":   {"study_id": {"type": "string"}},
+    "view_slices":   {"study_id": {"type": "string"}},
+    "run_detector":  {"study_id": {"type": "string"}},
+    "write_report":  {"hemorrhage": {"type": "string"},
+                      "subtype":    {"type": ["string", "null"]},
+                      "impression": {"type": "string"},
+                      "remarks":    {"type": ["string", "null"]}},
+    "set_priority":  {"priority": {"type": "string"}},
+    "send_message":  {"recipient": {"type": "string"}, "text": {"type": "string"}},
+}
+
+
+def native_tool_definitions(text: str = None) -> list:
+    """Tool-Definitionen für die Anthropic-Messages-Schnittstelle aus TOOL_DEFINITIONS."""
+    import re
+    text = TOOL_DEFINITIONS if text is None else text
+    tools = []
+    for m in re.finditer(r"^\d+\. (\w+)\n(.*?)(?=^\d+\. |\Z)", text, re.M | re.S):
+        name, body = m.group(1), m.group(2)
+        zeilen = []
+        for zeile in body.split("\n"):
+            if zeile.strip().startswith("Example:"):
+                break
+            zeilen.append(zeile[3:] if zeile.startswith("   ") else zeile)
+        tools.append({
+            "name": name,
+            "description": "\n".join(zeilen).strip(),
+            "input_schema": {"type": "object", "properties": NATIVE_INPUT_PROPERTIES[name]},
+        })
+    return tools
+
+
+NATIVE_TOOLS = native_tool_definitions()
+
+# Formatunabhängiger Teil der Kopfzeile von TOOL_DEFINITIONS ("call one at a
+# time"); steht im nativen Pfad dort im Systemprompt, wo sonst TOOL_DEFINITIONS
+# steht. Der Formatteil ("using a ```tool JSON block") entfällt.
+NATIVE_TOOL_RULE = "Call one tool at a time."
+
+
 # ── Tool-Ausführung ───────────────────────────────────────────────────────────
 
 def _resolve_study_id(requested: str, ctx: dict) -> str:

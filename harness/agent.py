@@ -25,11 +25,12 @@ from config import (
     VLLM_BASE_URL, VLLM_API_KEY, VLLM_MODELS,
     MODELS, OPENROUTER_PARAMS, PROMPT_CACHE_MODELS, MAX_TOOL_CALLS, MAX_TOKENS, SYSTEM_PROMPT, SYSTEM_PROMPT_VERSION, SYSTEM_PROMPTS,
     LOGS_DIR, PRIOR_REPORTS, SEND_MESSAGE_ENFORCE_ALLOWLIST,
+    NATIVE_TOOL_MODELS, NATIVE_PARAMS, ANTHROPIC_MESSAGES_BASE_URL,
     HEADER_SANITIZATION_ARMS, GUARD_ARMS, DATA_BLOCK_ARMS, DATA_BLOCK_END,
     PRIOR_REPORT_BLOCK_BEGIN, TASK_CONTEXT_FORMAT,
 )
 from tools import (
-    execute_tool, parse_tool_calls, TOOL_DEFINITIONS, _resolve_study_id, HEADER_FIELDS,
+    execute_tool, parse_tool_calls, TOOL_DEFINITIONS, NATIVE_TOOLS, NATIVE_TOOL_RULE, _resolve_study_id, HEADER_FIELDS,
 )
 from guard import GuardError, guard_events
 from variants import ensure_variant
@@ -84,7 +85,14 @@ def run_single(
         if not api_key:
             raise RuntimeError(f"{OPENROUTER_KEYS[openrouter_key]['env']} fehlt in .env "
                                f"(Key für {model_name})")
-        client = OpenAI(api_key=api_key, base_url=OPENROUTER_BASE_URL)
+        if model_name in NATIVE_TOOL_MODELS:
+            # Anthropic-Messages-Schnittstelle von OpenRouter (Bearer-Token)
+            import anthropic
+            client = anthropic.Anthropic(auth_token=api_key, api_key=None,
+                                         base_url=ANTHROPIC_MESSAGES_BASE_URL)
+        else:
+            client = OpenAI(api_key=api_key, base_url=OPENROUTER_BASE_URL)
+    native = model_name in NATIVE_TOOL_MODELS
 
     model_string = MODELS[model_name]
 
@@ -92,7 +100,10 @@ def run_single(
     # Kostenangabe in usage, Prompt-Caching. Der Nachrichtenverlauf bleibt
     # unverändert; temperature/top_p werden nie gesetzt.
     extra_body = {}
-    if model_name not in VLLM_MODELS:
+    if native:
+        extra_body = {**NATIVE_PARAMS[model_name], "cache_control": {"type": "ephemeral"}}
+        extra_body["extra_body"] = {**extra_body["extra_body"], "usage": {"include": True}}
+    elif model_name not in VLLM_MODELS:
         extra_body = {**OPENROUTER_PARAMS.get(model_name, {}), "usage": {"include": True}}
         if model_name in PROMPT_CACHE_MODELS:
             extra_body["cache_control"] = {"type": "ephemeral"}
@@ -175,10 +186,16 @@ def run_single(
     task_text = "\n".join(task_parts)
 
     # ── Nachrichtenverlauf initialisieren ────────────────────────────────────
+    # Native Tool-Schnittstelle: an der Stelle von TOOL_DEFINITIONS steht nur
+    # NATIVE_TOOL_RULE, die Werkzeuge kommen über den tools-Parameter (NATIVE_TOOLS)
+    system_text = prompt_text + "\n\n" + (NATIVE_TOOL_RULE if native else TOOL_DEFINITIONS)
     messages = [
-        {"role": "system", "content": prompt_text + "\n\n" + TOOL_DEFINITIONS},
+        {"role": "system", "content": system_text},
         {"role": "user",   "content": task_text},
     ]
+    tool_definitions = (NATIVE_TOOL_RULE + "\n\n"
+                        + json.dumps(NATIVE_TOOLS, sort_keys=True, ensure_ascii=False)
+                        if native else TOOL_DEFINITIONS)
 
     # ── Protokoll-Struktur ───────────────────────────────────────────────────
     log = {
@@ -189,7 +206,9 @@ def run_single(
         # Prüfsumme des Prompttexts: erkennt Änderungen ohne Versionsbump
         "system_prompt_sha256":   hashlib.sha256(prompt_text.encode("utf-8")).hexdigest(),
         # Tool-Beschreibung steht in derselben System-Nachricht, für alle Arme gleich
-        "tool_definitions_sha256": hashlib.sha256(TOOL_DEFINITIONS.encode("utf-8")).hexdigest(),
+        "tool_definitions_sha256": hashlib.sha256(tool_definitions.encode("utf-8")).hexdigest(),
+        # "text": ```tool-Blöcke im Text; "native": tools-Parameter, tool_use/tool_result
+        "tool_interface":         "native" if native else "text",
         "arm":                    "attack" if prompt_version == "1.0" else "defense",
         "is_control":             attack.get("target", "") == "control",
         "send_message_enforce_allowlist": SEND_MESSAGE_ENFORCE_ALLOWLIST,
@@ -218,6 +237,11 @@ def run_single(
         "n_tool_calls":           0,
         # Weitere Tool-Aufrufe einer Antwort, die nicht ausgeführt wurden
         "skipped_tool_calls":     [],
+        # Nur native Schnittstelle: ```tool-Blöcke, die das Modell trotzdem als
+        # Text schreibt; werden nicht geparst und nicht ausgeführt
+        "text_tool_blocks":       [] if native else None,
+        # Nur native Schnittstelle: Antworten mit mehr als einem tool_use-Block
+        "n_multi_tool_use_responses": 0 if native else None,
         "abort_reason":           None,
         # Technischer Fehler (z. B. Guard-Ausfall): Lauf wird nicht gewertet
         "invalid":                False,
@@ -243,189 +267,143 @@ def run_single(
     # ── Agentenschleife ──────────────────────────────────────────────────────
     required_tools_called = {"write_report": False, "set_priority": False}
 
-    for turn in range(MAX_TOOL_CALLS + 1):
+    if native:
+        _native_loop(client, model_string, system_text, task_text, extra_body,
+                     log, run_context, required_tools_called)
+    else:
+        for turn in range(MAX_TOOL_CALLS + 1):
 
-        if log["invalid"]:
-            break
+            if log["invalid"]:
+                break
 
-        # Modell aufrufen
-        try:
-            anfrage = {"model": model_string, "messages": messages, "max_tokens": MAX_TOKENS}
-            if extra_body:
-                anfrage["extra_body"] = extra_body
-            response = client.chat.completions.create(**anfrage)
-        except Exception as e:
-            log["abort_reason"] = f"API error: {e}"
-            break
+            # Modell aufrufen
+            try:
+                anfrage = {"model": model_string, "messages": messages, "max_tokens": MAX_TOKENS}
+                if extra_body:
+                    anfrage["extra_body"] = extra_body
+                response = client.chat.completions.create(**anfrage)
+            except Exception as e:
+                log["abort_reason"] = f"API error: {e}"
+                break
 
-        # Antwort ohne choices (z. B. Fehler beim Anbieter, von OpenRouter mit
-        # Status 200 weitergereicht): als API-Fehler werten, Resume wiederholt
-        if not getattr(response, "choices", None):
-            extra = getattr(response, "model_extra", None) or {}
-            log["abort_reason"] = f"API error: Antwort ohne choices: {extra.get('error') or extra}"[:2000]
-            log["cost_usd"] = round(log["cost_usd"] + (_usage_details(
-                getattr(response, "usage", None)).get("cost") or 0.0), 8)
-            break
+            # Antwort ohne choices (z. B. Fehler beim Anbieter, von OpenRouter mit
+            # Status 200 weitergereicht): als API-Fehler werten, Resume wiederholt
+            if not getattr(response, "choices", None):
+                extra = getattr(response, "model_extra", None) or {}
+                log["abort_reason"] = f"API error: Antwort ohne choices: {extra.get('error') or extra}"[:2000]
+                log["cost_usd"] = round(log["cost_usd"] + (_usage_details(
+                    getattr(response, "usage", None)).get("cost") or 0.0), 8)
+                break
 
-        assistant_msg = response.choices[0].message
-        content       = assistant_msg.content or ""
-        usage         = response.usage
+            assistant_msg = response.choices[0].message
+            content       = assistant_msg.content or ""
+            usage         = response.usage
 
-        if usage:
-            log["total_tokens"] += (usage.total_tokens or 0)
-        kosten = _usage_details(usage)
-        log["cost_usd"] = round(log["cost_usd"] + (kosten.get("cost") or 0.0), 8)
-        native_finish = (getattr(response.choices[0], "model_extra", None) or {}).get(
-            "native_finish_reason")
+            if usage:
+                log["total_tokens"] += (usage.total_tokens or 0)
+            kosten = _usage_details(usage)
+            log["cost_usd"] = round(log["cost_usd"] + (kosten.get("cost") or 0.0), 8)
+            native_finish = (getattr(response.choices[0], "model_extra", None) or {}).get(
+                "native_finish_reason")
 
-        # Abbruchgrund pro Antwort: "length" heißt, max_tokens hat die Antwort
-        # abgeschnitten. response_model: welches Modell laut Anbieter
-        # geantwortet hat (macht eine Umstellung hinter dem Namen sichtbar)
-        extras = _message_extras(assistant_msg)
-        log["finish_reasons"].append({
-            "turn":              len(log["finish_reasons"]),
-            "finish_reason":     response.choices[0].finish_reason,
-            "completion_tokens": usage.completion_tokens if usage else None,
-            "response_model":    getattr(response, "model", None),
-            "native_tool_calls": len(extras.get("tool_calls") or []),
-            "native_finish_reason": native_finish,
-            **kosten,
-        })
-        # Rohantwort außer content (Reasoning, native Tool-Calls usw.): zeigt,
-        # ob der Server Teile der Antwort aus content herausgenommen hat.
-        # Ausgewertet wird weiterhin nur content.
-        log["response_extras"].append({"turn": len(log["finish_reasons"]) - 1, **extras})
+            # Abbruchgrund pro Antwort: "length" heißt, max_tokens hat die Antwort
+            # abgeschnitten. response_model: welches Modell laut Anbieter
+            # geantwortet hat (macht eine Umstellung hinter dem Namen sichtbar)
+            extras = _message_extras(assistant_msg)
+            log["finish_reasons"].append({
+                "turn":              len(log["finish_reasons"]),
+                "finish_reason":     response.choices[0].finish_reason,
+                "completion_tokens": usage.completion_tokens if usage else None,
+                "response_model":    getattr(response, "model", None),
+                "native_tool_calls": len(extras.get("tool_calls") or []),
+                "native_finish_reason": native_finish,
+                **kosten,
+            })
+            # Rohantwort außer content (Reasoning, native Tool-Calls usw.): zeigt,
+            # ob der Server Teile der Antwort aus content herausgenommen hat.
+            # Ausgewertet wird weiterhin nur content.
+            log["response_extras"].append({"turn": len(log["finish_reasons"]) - 1, **extras})
 
-        # Nachricht loggen
-        messages.append({"role": "assistant", "content": content})
-        log["messages"].append({"role": "assistant", "content": content})
+            # Nachricht loggen
+            messages.append({"role": "assistant", "content": content})
+            log["messages"].append({"role": "assistant", "content": content})
 
-        # Verweigerung (eigene Kategorie, wie die Abbrüche): Anthropic meldet
-        # stop_reason "refusal", OpenAI ein refusal-Feld bzw. content_filter
-        verweigert = _refusal(response.choices[0].finish_reason, native_finish,
-                              getattr(assistant_msg, "refusal", None))
-        if verweigert:
-            log["refusal"] = {"turn": turn, **verweigert}
-            log["abort_reason"] = "refused"
-            break
+            # Verweigerung (eigene Kategorie, wie die Abbrüche): Anthropic meldet
+            # stop_reason "refusal", OpenAI ein refusal-Feld bzw. content_filter
+            verweigert = _refusal(response.choices[0].finish_reason, native_finish,
+                                  getattr(assistant_msg, "refusal", None))
+            if verweigert:
+                log["refusal"] = {"turn": turn, **verweigert}
+                log["abort_reason"] = "refused"
+                break
 
-        # Tool-Aufrufe parsen: pro Antwort wird nur der erste ausgeführt, die
-        # übrigen werden protokolliert und dem Modell als nicht ausgeführt
-        # gemeldet (siehe docs/design_decisions.md)
-        tool_calls = parse_tool_calls(content)
+            # Tool-Aufrufe parsen: pro Antwort wird nur der erste ausgeführt, die
+            # übrigen werden protokolliert und dem Modell als nicht ausgeführt
+            # gemeldet (siehe docs/design_decisions.md)
+            tool_calls = parse_tool_calls(content)
 
-        if not tool_calls:
-            # Kein Tool-Aufruf — prüfen ob beide Pflichttools aufgerufen wurden
+            if not tool_calls:
+                # Kein Tool-Aufruf — prüfen ob beide Pflichttools aufgerufen wurden
+                if required_tools_called["write_report"] and required_tools_called["set_priority"]:
+                    log["abort_reason"] = "completed"
+                    break
+                else:
+                    # Modell hat aufgehört ohne Pflichttools — Abbruch
+                    missing = [k for k, v in required_tools_called.items() if not v]
+                    log["abort_reason"] = f"stopped_without_required_tools: {missing}"
+                    break
+
+            tool_call = tool_calls[0]
+            not_executed = tool_calls[1:]
+            for index, call in enumerate(not_executed, start=1):
+                log["skipped_tool_calls"].append({
+                    "turn":       turn,
+                    "call_index": index,
+                    "name":       call.get("name", ""),
+                    "arguments":  call.get("arguments", {}),
+                    "reason":     "not_executed_one_call_per_turn",
+                })
+
+            # Tool ausführen
+            tool_name = tool_call.get("name", "")
+            tool_args = tool_call.get("arguments", {})
+            status, tool_result, images = _run_tool(
+                log, run_context, turn, tool_name, tool_args, required_tools_called)
+            if status == "max_tool_calls":
+                log["abort_reason"] = "max_tool_calls_reached"
+                break
+            if status == "guard_failure":
+                break
+
+            # Tool-Ergebnis als User-Nachricht zurückgeben
+            result_msg = _tool_result_text(
+                tool_name, tool_result, [c.get("name", "?") for c in not_executed])
+            if images:
+                # Text + die Schichten als echte Bild-Blöcke
+                content = [{
+                    "type": "text",
+                    "text": result_msg + _images_suffix(images),
+                }]
+                content += [
+                    {"type": "image_url", "image_url": {"url": data_url}}
+                    for data_url in images
+                ]
+                messages.append({"role": "user", "content": content})
+                log["messages"].append({
+                    "role":    "user",
+                    "content": result_msg + f"\n[{len(images)} image blocks attached]",
+                })
+            else:
+                messages.append({"role": "user", "content": result_msg})
+                log["messages"].append({"role": "user", "content": result_msg})
+
+            # Fertig wenn beide Pflichttools aufgerufen
             if required_tools_called["write_report"] and required_tools_called["set_priority"]:
                 log["abort_reason"] = "completed"
                 break
-            else:
-                # Modell hat aufgehört ohne Pflichttools — Abbruch
-                missing = [k for k, v in required_tools_called.items() if not v]
-                log["abort_reason"] = f"stopped_without_required_tools: {missing}"
-                break
 
-        tool_call = tool_calls[0]
-        not_executed = tool_calls[1:]
-        for index, call in enumerate(not_executed, start=1):
-            log["skipped_tool_calls"].append({
-                "turn":       turn,
-                "call_index": index,
-                "name":       call.get("name", ""),
-                "arguments":  call.get("arguments", {}),
-                "reason":     "not_executed_one_call_per_turn",
-            })
-
-        # Tool ausführen
-        tool_name = tool_call.get("name", "")
-        tool_args = tool_call.get("arguments", {})
-        log["n_tool_calls"] += 1
-
-        if log["n_tool_calls"] > MAX_TOOL_CALLS:
-            log["abort_reason"] = "max_tool_calls_reached"
-            break
-
-        try:
-            tool_result = execute_tool(tool_name, tool_args, run_context)
-        except GuardError as e:
-            _mark_guard_failure(log, f"{tool_name}: {e}")
-            break
-
-        # Bilder getrennt behandeln: sie gehen als echte Bild-Blöcke an das
-        # Modell, nicht als base64-Text im JSON-Ergebnis.
-        images = None
-        if isinstance(tool_result, dict) and "images" in tool_result:
-            images = tool_result.pop("images")
-
-        # Tool-Aufruf protokollieren (ohne base64-Ballast)
-        tool_log_entry = {
-            "turn":      turn,
-            "name":      tool_name,
-            "arguments": tool_args,
-            "result":    tool_result,
-        }
-        if images:
-            tool_log_entry["n_images"] = len(images)
-            tool_log_entry["images_omitted"] = "base64 data URLs, als Bild-Blöcke übergeben"
-        if "study_id" in tool_args:
-            # angefragte vs. tatsächlich verwendete Study-ID
-            tool_log_entry["study_resolved"] = _resolve_study_id(
-                tool_args.get("study_id", ""), run_context
-            )
-        log["tool_calls"].append(tool_log_entry)
-
-        # Ergebnisse für Scoring speichern. Befund und Priorität zählen nur,
-        # wenn das Tool sie bestätigt hat; bei ungültigen Werten bekommt das
-        # Modell die Fehlermeldung und kann korrigieren.
-        confirmed = isinstance(tool_result, dict) and tool_result.get("status") == "confirmed"
-        if tool_name == "write_report" and confirmed:
-            required_tools_called["write_report"] = True
-            log["write_report_args"] = tool_args
-        elif tool_name == "set_priority" and confirmed:
-            required_tools_called["set_priority"] = True
-            log["set_priority_args"] = tool_args
-        elif tool_name == "send_message":
-            log["send_message_calls"].append({
-                "recipient": tool_args.get("recipient", ""),
-                "text":      tool_args.get("text", ""),
-                "result":    tool_result,
-            })
-
-        # Tool-Ergebnis als User-Nachricht zurückgeben
-        result_msg = f"Tool result for {tool_name}:\n```json\n{json.dumps(tool_result, indent=2)}\n```"
-        if not_executed:
-            namen = ", ".join(c.get("name", "?") for c in not_executed)
-            result_msg += (
-                f"\n\nNote: only the first tool call in your message was executed. "
-                f"{len(not_executed)} further tool call(s) were not executed: {namen}. "
-                f"Call them again if still needed, one per message."
-            )
-        if images:
-            # Text + die Schichten als echte Bild-Blöcke
-            content = [{
-                "type": "text",
-                "text": result_msg + f"\n\n{len(images)} axial slices follow as images.",
-            }]
-            content += [
-                {"type": "image_url", "image_url": {"url": data_url}}
-                for data_url in images
-            ]
-            messages.append({"role": "user", "content": content})
-            log["messages"].append({
-                "role":    "user",
-                "content": result_msg + f"\n[{len(images)} image blocks attached]",
-            })
         else:
-            messages.append({"role": "user", "content": result_msg})
-            log["messages"].append({"role": "user", "content": result_msg})
-
-        # Fertig wenn beide Pflichttools aufgerufen
-        if required_tools_called["write_report"] and required_tools_called["set_priority"]:
-            log["abort_reason"] = "completed"
-            break
-
-    else:
-        log["abort_reason"] = "max_turns_reached"
+            log["abort_reason"] = "max_turns_reached"
 
     # ── Lauf abschließen ─────────────────────────────────────────────────────
     log["guard_events"] = guard_events(run_context)
@@ -443,6 +421,239 @@ def run_single(
     _save_log(log)
 
     return log
+
+
+# ── Native Tool-Schnittstelle (Anthropic Messages, nur NATIVE_TOOL_MODELS) ────
+
+def _image_block(data_url: str) -> dict:
+    """data URL (wie im Textformat) -> Anthropic-Bildblock mit denselben Bytes."""
+    kopf, daten = data_url.split(",", 1)
+    media_type = kopf[len("data:"):].split(";")[0]
+    return {"type": "image", "source": {"type": "base64", "media_type": media_type,
+                                        "data": daten}}
+
+
+def _native_usage(usage) -> dict:
+    """Token und Kosten einer Messages-Antwort, Felder wie _usage_details."""
+    if usage is None:
+        return {}
+    d = usage.model_dump(exclude_none=True) if hasattr(usage, "model_dump") else dict(usage)
+    cache_read  = d.get("cache_read_input_tokens") or 0
+    cache_write = d.get("cache_creation_input_tokens") or 0
+    out = {
+        "prompt_tokens":      (d.get("input_tokens") or 0) + cache_read + cache_write,
+        "cached_tokens":      cache_read,
+        "cache_write_tokens": cache_write,
+        "reasoning_tokens":   (d.get("output_tokens_details") or {}).get("thinking_tokens"),
+        "cost":               d.get("cost"),
+    }
+    return {k: v for k, v in out.items() if v is not None}
+
+
+def _native_loop(client, model_string: str, system_text: str, task_text: str, params: dict,
+                 log: dict, run_context: dict, required_tools_called: dict):
+    """
+    Agentenschleife über die native Tool-Schnittstelle. Gleiche Regeln wie im
+    Textformat: ein Tool-Aufruf pro Antwort, Abschluss nach write_report und
+    set_priority, Limit MAX_TOOL_CALLS. Die Ergebnistexte sind identisch mit dem
+    Textformat (_tool_result_text), nur als tool_result-Block verpackt; Bilder
+    als Bildblöcke im selben tool_result. Setzt log["abort_reason"].
+    """
+    messages = [{"role": "user", "content": task_text}]
+
+    for turn in range(MAX_TOOL_CALLS + 1):
+        if log["invalid"]:
+            return
+
+        try:
+            response = client.messages.create(
+                model=model_string, max_tokens=MAX_TOKENS, system=system_text,
+                tools=NATIVE_TOOLS, messages=messages, **params,
+                # ausdrücklich wie die OpenAI-Voreinstellung (600 s); ohne Angabe
+                # verlangt das SDK bei großem max_tokens Streaming
+                timeout=600,
+            )
+        except Exception as e:
+            log["abort_reason"] = f"API error: {e}"
+            return
+
+        bloecke = list(getattr(response, "content", None) or [])
+        if not bloecke and getattr(response, "stop_reason", None) is None:
+            log["abort_reason"] = f"API error: Antwort ohne content: {getattr(response, 'model_extra', None)}"[:2000]
+            return
+
+        kosten = _native_usage(response.usage)
+        log["total_tokens"] += kosten.get("prompt_tokens", 0) + (
+            getattr(response.usage, "output_tokens", 0) or 0)
+        log["cost_usd"] = round(log["cost_usd"] + (kosten.get("cost") or 0.0), 8)
+
+        text      = "".join(b.text for b in bloecke if b.type == "text")
+        tool_uses = [b for b in bloecke if b.type == "tool_use"]
+        log["finish_reasons"].append({
+            "turn":                 len(log["finish_reasons"]),
+            "finish_reason":        response.stop_reason,
+            "completion_tokens":    getattr(response.usage, "output_tokens", None),
+            "response_model":       getattr(response, "model", None),
+            "native_tool_calls":    len(tool_uses),
+            "native_finish_reason": response.stop_reason,
+            **kosten,
+        })
+        log["response_extras"].append({
+            "turn":      len(log["finish_reasons"]) - 1,
+            "provider":  (getattr(response, "model_extra", None) or {}).get("provider"),
+            "thinking":  [getattr(b, "thinking", "") for b in bloecke if b.type == "thinking"],
+            "redacted_thinking": sum(b.type == "redacted_thinking" for b in bloecke),
+            "tool_use":  [{"id": b.id, "name": b.name, "input": b.input} for b in tool_uses],
+        })
+
+        # Antwort unverändert in den Verlauf (Thinking-Blöcke müssen bleiben)
+        messages.append({"role": "assistant", "content": bloecke})
+        log["messages"].append({
+            "role": "assistant", "content": text,
+            "tool_use": [{"id": b.id, "name": b.name, "input": b.input} for b in tool_uses],
+        })
+
+        # Verweigerung
+        if response.stop_reason == "refusal":
+            details = getattr(response, "stop_details", None)
+            log["refusal"] = {"turn": turn, "finish_reason": "refusal",
+                              "native_finish_reason": "refusal",
+                              "stop_details": details.model_dump() if hasattr(details, "model_dump") else details}
+            log["abort_reason"] = "refused"
+            return
+
+        # ```tool-Blöcke im Text werden nicht ausgeführt, nur protokolliert
+        als_text = parse_tool_calls(text)
+        if als_text or "```tool" in text:
+            log["text_tool_blocks"].append({"turn": turn, "n_parsed": len(als_text),
+                                            "calls": als_text})
+
+        if not tool_uses:
+            if required_tools_called["write_report"] and required_tools_called["set_priority"]:
+                log["abort_reason"] = "completed"
+            else:
+                missing = [k for k, v in required_tools_called.items() if not v]
+                log["abort_reason"] = f"stopped_without_required_tools: {missing}"
+            return
+
+        erster, rest = tool_uses[0], tool_uses[1:]
+        if rest:
+            log["n_multi_tool_use_responses"] += 1
+        for index, b in enumerate(rest, start=1):
+            log["skipped_tool_calls"].append({
+                "turn": turn, "call_index": index, "name": b.name,
+                "arguments": b.input, "reason": "not_executed_one_call_per_turn",
+            })
+
+        tool_name = erster.name
+        tool_args = dict(erster.input or {})
+        status, tool_result, images = _run_tool(
+            log, run_context, turn, tool_name, tool_args, required_tools_called)
+        if status == "max_tool_calls":
+            log["abort_reason"] = "max_tool_calls_reached"
+            return
+        if status == "guard_failure":
+            return
+
+        result_msg = _tool_result_text(tool_name, tool_result, [b.name for b in rest])
+        inhalt = [{"type": "text",
+                   "text": result_msg + (_images_suffix(images) if images else "")}]
+        inhalt += [_image_block(u) for u in (images or [])]
+        ergebnisse = [{"type": "tool_result", "tool_use_id": erster.id, "content": inhalt}]
+        # Jeder tool_use braucht ein tool_result; nicht ausgeführte bekommen
+        # den Hinweis (steht wie im Textformat auch im ersten Ergebnis)
+        ergebnisse += [{"type": "tool_result", "tool_use_id": b.id, "is_error": True,
+                        "content": "Not executed: only the first tool call in your message was executed."}
+                       for b in rest]
+        messages.append({"role": "user", "content": ergebnisse})
+        log["messages"].append({
+            "role": "user", "tool_use_id": erster.id,
+            "content": result_msg + (f"\n[{len(images)} image blocks attached]" if images else ""),
+        })
+
+        if required_tools_called["write_report"] and required_tools_called["set_priority"]:
+            log["abort_reason"] = "completed"
+            return
+
+    log["abort_reason"] = "max_turns_reached"
+
+
+# ── Gemeinsam für Textformat und native Tool-Schnittstelle ────────────────────
+
+def _run_tool(log: dict, run_context: dict, turn: int, tool_name: str, tool_args: dict,
+              required_tools_called: dict) -> tuple:
+    """
+    Führt einen Tool-Aufruf aus und protokolliert ihn. Rückgabe (status,
+    tool_result, images): status "ok", "max_tool_calls" (Limit überschritten,
+    nicht ausgeführt) oder "guard_failure" (Lauf ungültig). Bilder werden aus
+    dem Ergebnis genommen und getrennt zurückgegeben (data URLs).
+    """
+    log["n_tool_calls"] += 1
+    if log["n_tool_calls"] > MAX_TOOL_CALLS:
+        return "max_tool_calls", None, None
+    try:
+        tool_result = execute_tool(tool_name, tool_args, run_context)
+    except GuardError as e:
+        _mark_guard_failure(log, f"{tool_name}: {e}")
+        return "guard_failure", None, None
+
+    # Bilder getrennt behandeln: sie gehen als echte Bild-Blöcke an das
+    # Modell, nicht als base64-Text im JSON-Ergebnis.
+    images = None
+    if isinstance(tool_result, dict) and "images" in tool_result:
+        images = tool_result.pop("images")
+
+    # Tool-Aufruf protokollieren (ohne base64-Ballast)
+    tool_log_entry = {
+        "turn":      turn,
+        "name":      tool_name,
+        "arguments": tool_args,
+        "result":    tool_result,
+    }
+    if images:
+        tool_log_entry["n_images"] = len(images)
+        tool_log_entry["images_omitted"] = "base64 data URLs, als Bild-Blöcke übergeben"
+    if "study_id" in tool_args:
+        # angefragte vs. tatsächlich verwendete Study-ID
+        tool_log_entry["study_resolved"] = _resolve_study_id(
+            tool_args.get("study_id", ""), run_context
+        )
+    log["tool_calls"].append(tool_log_entry)
+
+    # Ergebnisse für Scoring speichern. Befund und Priorität zählen nur,
+    # wenn das Tool sie bestätigt hat; bei ungültigen Werten bekommt das
+    # Modell die Fehlermeldung und kann korrigieren.
+    confirmed = isinstance(tool_result, dict) and tool_result.get("status") == "confirmed"
+    if tool_name == "write_report" and confirmed:
+        required_tools_called["write_report"] = True
+        log["write_report_args"] = tool_args
+    elif tool_name == "set_priority" and confirmed:
+        required_tools_called["set_priority"] = True
+        log["set_priority_args"] = tool_args
+    elif tool_name == "send_message":
+        log["send_message_calls"].append({
+            "recipient": tool_args.get("recipient", ""),
+            "text":      tool_args.get("text", ""),
+            "result":    tool_result,
+        })
+    return "ok", tool_result, images
+
+
+def _tool_result_text(tool_name: str, tool_result, not_executed_names: list) -> str:
+    """Text des Tool-Ergebnisses, identisch für beide Schnittstellen."""
+    result_msg = f"Tool result for {tool_name}:\n```json\n{json.dumps(tool_result, indent=2)}\n```"
+    if not_executed_names:
+        namen = ", ".join(not_executed_names)
+        result_msg += (
+            f"\n\nNote: only the first tool call in your message was executed. "
+            f"{len(not_executed_names)} further tool call(s) were not executed: {namen}. "
+            f"Call them again if still needed, one per message."
+        )
+    return result_msg
+
+
+def _images_suffix(images: list) -> str:
+    return f"\n\n{len(images)} axial slices follow as images."
 
 
 def _usage_details(usage) -> dict:

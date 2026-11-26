@@ -31,6 +31,7 @@ class TestFestgelegteModelle(unittest.TestCase):
     def test_modell_liste(self):
         self.assertEqual(config.MODELS, {
             "sonnet":    "anthropic/claude-sonnet-5.5-20260928",
+            "sonnet_native": "anthropic/claude-sonnet-5.5-20260928",
             "gpt":       "openai/gpt-6.1-sol-20260929",
             "google":    "google/gemini-4-argon-20261013",
             "glm":       "glm-5.3-flash",
@@ -108,7 +109,8 @@ class TestClient(unittest.TestCase):
 
     def test_key_zuordnung(self):
         self.assertEqual(config.MODEL_OPENROUTER_KEY,
-                         {"sonnet": "sonnet", "gpt": "gpt_google", "google": "gpt_google"})
+                         {"sonnet": "sonnet", "sonnet_native": "sonnet",
+                          "gpt": "gpt_google", "google": "gpt_google"})
         self.assertEqual(set(config.MODEL_OPENROUTER_KEY),
                          set(config.MODELS) - config.VLLM_MODELS)
         self.assertEqual(config.OPENROUTER_KEYS["sonnet"]["budget_usd"], 300.0)
