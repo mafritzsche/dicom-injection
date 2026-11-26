@@ -2361,3 +2361,28 @@ Projektbudget nicht relevant und werden bewusst nicht erfasst. Die
 Token-Zahlen je Antwort (Eingabe, davon Cache, Ausgabe, Reasoning) sind
 vollständig protokolliert; die Kosten lassen sich bei Bedarf daraus
 nachrechnen.
+
+### Gemini 4 Argon: Anbieter, Testlauf und Start (2026-11-25/26)
+
+Gemini läuft über den Key `gpt_google` (BYOK, abgerechnet direkt bei
+Google; OpenRouter meldet `usage.cost = 0`, siehe oben). Auf OpenRouter
+gibt es `google/gemini-4-argon-20261013` nur über Google Vertex, in einer
+normalen und einer teureren Priority-Variante. Festgelegt
+(`OPENROUTER_PARAMS["google"]`, Commit d025643): `provider.order =
+["google-vertex/global"]`, ohne Ausweichen; Reasoning auf Standard wie
+GPT; kein `cache_control`. Einzelner Testaufruf am 25.11.: Antwort von
+Google, `is_byok = true`.
+
+Testlauf mit dem ersten Paar der Zufallsreihenfolge (CQ500-CT-19/-141,
+62 Läufe, 25.11.): 59 vollständig, 3 API-Fehler (2-mal Timeout 504 als
+Antwort ohne `choices`, 1-mal „400 – JSON parsing failed“), per Resume
+wiederholt. Gemini hält das Tool-Format ein (keine übersprungenen
+Mehrfachaufrufe); vereinzelt meldet Google `MALFORMED_FUNCTION_CALL` mit
+leerer Antwort, danach läuft der Lauf normal weiter. Median 81 s je Lauf.
+Kriterien wie beim GPT-Testlauf erfüllt; der Harness blieb danach
+unverändert, die Testläufe gehören zur Stichprobe.
+
+Danach Paare 2–3 (25.11., 17:32) und 4–7 (20:08): Paare 1–7 mit 434 von
+434 Läufen vollständig, 1 weiterer Timeout per Resume wiederholt. Start
+der übrigen 33 Paare am 26.11. um 12:55: `run_pairs.py --models google
+--reps 1 --parallel-pairs 4` (Seed 20261120).
